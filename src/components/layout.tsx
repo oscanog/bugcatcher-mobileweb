@@ -3,11 +3,14 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { appRoutes, bottomNavItems, drawerItems, type AppRouteDefinition } from '../app-data'
 import { setDemoAuthenticated } from '../demo-auth'
 import { useNotifications } from '../notifications-context'
-import { BrandMark, Icon } from './ui'
+import { useTheme } from '../theme-context'
+import { BrandMark, Icon, ThemeToggle } from './ui'
 
 export function AppViewport({ children }: { children: ReactNode }) {
+  const { theme } = useTheme()
+
   return (
-    <div className="site-shell">
+    <div className="site-shell" data-theme={theme}>
       <div className="site-shell__orb site-shell__orb--one" aria-hidden="true" />
       <div className="site-shell__orb site-shell__orb--two" aria-hidden="true" />
       <div className="site-shell__grid" aria-hidden="true" />
@@ -76,14 +79,17 @@ export function AppShell() {
             {activeRoute.subtitle ? <p>{activeRoute.subtitle}</p> : null}
           </div>
 
-          <NavLink
-            to="/app/notifications"
-            className={({ isActive }) => `top-bar__chip top-bar__chip--icon ${isActive ? 'is-active' : ''}`}
-            aria-label="Notifications"
-          >
-            <Icon name="bell" />
-            {unreadCount > 0 ? <span className="top-bar__badge">{unreadCount}</span> : null}
-          </NavLink>
+          <div className="top-bar__actions">
+            <ThemeToggle />
+            <NavLink
+              to="/app/notifications"
+              className={({ isActive }) => `top-bar__chip top-bar__chip--icon ${isActive ? 'is-active' : ''}`}
+              aria-label="Notifications"
+            >
+              <Icon name="bell" />
+              {unreadCount > 0 ? <span className="top-bar__badge">{unreadCount}</span> : null}
+            </NavLink>
+          </div>
         </header>
 
         <main className="page-scroll">

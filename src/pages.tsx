@@ -15,7 +15,7 @@ import {
   type OpenClawSectionData,
 } from './app-data'
 import { AuthLayout } from './components/auth-layout'
-import { BrandMark, AuthField, DetailPair, Icon, ListRow, SectionCard, StatCard, StatusTile } from './components/ui'
+import { BrandMark, AuthField, DetailPair, Icon, ListRow, SectionCard, StatCard, StatusTile, ThemeToggle } from './components/ui'
 import { LegacyHeroAnimation } from './components/legacy-hero-animation'
 import { isDemoAuthenticated, setDemoAuthenticated } from './demo-auth'
 import { useNotifications } from './notifications-context'
@@ -24,40 +24,19 @@ const LEGACY_LANDING_BG =
   'https://i.pinimg.com/1200x/b2/13/65/b21365c035ff1cfa52edc492affa885b.jpg'
 
 export function LandingPage() {
-  const [isSignedIn, setIsSignedIn] = useState(() => isDemoAuthenticated())
+  const [isSignedIn] = useState(() => isDemoAuthenticated())
   const navigate = useNavigate()
   const startPath = isSignedIn ? '/app/dashboard' : '/login'
-
-  const handleLogout = () => {
-    setDemoAuthenticated(false)
-    setIsSignedIn(false)
-    navigate('/', { replace: true })
-  }
 
   return (
     <div className="landing-page">
       <header className="landing-header">
         <BrandMark />
         <div className="landing-header__actions">
-          {isSignedIn ? (
-            <>
-              <Link to="/app/dashboard" className="landing-link">
-                Dashboard
-              </Link>
-              <button type="button" className="landing-link landing-link--danger" onClick={handleLogout}>
-                Logout
-              </button>
-            </>
-          ) : (
-            <>
-              <Link to="/login" className="landing-link">
-                Login
-              </Link>
-              <Link to="/signup" className="landing-link">
-                Sign Up
-              </Link>
-            </>
-          )}
+          <ThemeToggle />
+          <button type="button" className="landing-link" onClick={() => navigate('/login')}>
+            Login
+          </button>
         </div>
       </header>
 
@@ -128,6 +107,8 @@ export function LoginPage() {
     <AuthLayout
       title="Login"
       subtitle="Super admin access"
+      navLabel="Sign Up"
+      navTo="/signup"
       footer={
         <p>
           No account? <Link to="/signup">Sign Up</Link>
@@ -154,6 +135,8 @@ export function SignupPage() {
     <AuthLayout
       title="Sign Up"
       subtitle="Create account"
+      navLabel="Login"
+      navTo="/login"
       footer={
         <p>
           Have account? <Link to="/login">Login</Link>
@@ -178,6 +161,8 @@ export function ForgotPasswordPage() {
     <AuthLayout
       title="Forgot Password"
       subtitle="Send OTP"
+      navLabel="Login"
+      navTo="/login"
       footer={
         <p>
           Back to <Link to="/login">Login</Link>
@@ -199,6 +184,8 @@ export function ForgotPasswordVerifyPage() {
     <AuthLayout
       title="OTP Verify"
       subtitle="6-digit code"
+      navLabel="Login"
+      navTo="/login"
       footer={
         <p>
           Need new code? <Link to="/forgot-password">Retry</Link>
@@ -224,7 +211,7 @@ export function ForgotPasswordVerifyPage() {
 
 export function ForgotPasswordSuccessPage() {
   return (
-    <AuthLayout title="Reset Success" subtitle="Password updated">
+    <AuthLayout title="Reset Success" subtitle="Password updated" navLabel="Login" navTo="/login">
       <div className="success-panel">
         <div className="success-panel__icon">
           <Icon name="checklist" />

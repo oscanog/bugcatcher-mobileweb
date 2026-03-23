@@ -1,22 +1,35 @@
 import type { ReactNode } from 'react'
-import { BrandMark } from './ui'
+import { Link } from 'react-router-dom'
+import { BrandMark, ThemeToggle } from './ui'
 
 export function AuthLayout({
   title,
   subtitle,
   children,
   footer,
+  navLabel,
+  navTo,
 }: {
   title: string
   subtitle?: string
   children: ReactNode
   footer?: ReactNode
+  navLabel: string
+  navTo: string
 }) {
   return (
     <div className="auth-screen">
-      <div className="auth-screen__hero auth-screen__hero--compact">
-        <BrandMark />
-      </div>
+      <header className="landing-header auth-screen__header">
+        <Link to="/" className="auth-screen__brand-link" aria-label="Go to landing page">
+          <BrandMark />
+        </Link>
+        <div className="landing-header__actions">
+          <ThemeToggle />
+          <Link to={navTo} className="landing-link">
+            {navLabel}
+          </Link>
+        </div>
+      </header>
 
       <div className="auth-card">
         <div className="auth-card__header">

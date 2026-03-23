@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react'
 import type { IconName, StatCardData } from '../app-data'
+import { useTheme } from '../theme-context'
 
 export function BrandMark() {
   return (
     <div className="brand-mark">
       <span className="brand-mark__icon" aria-hidden="true">
-        <span className="brand-mark__dot brand-mark__dot--one" />
-        <span className="brand-mark__dot brand-mark__dot--two" />
-        <span className="brand-mark__dot brand-mark__dot--three" />
+        <img className="brand-mark__logo" src="/favicon.svg" alt="" />
       </span>
       <span className="brand-mark__text">BugCatcher</span>
     </div>
@@ -275,5 +274,49 @@ export function DetailPair({ label, value }: { label: string; value: string }) {
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  )
+}
+
+export function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme()
+  const nextTheme = theme === 'light' ? 'dark' : 'light'
+
+  return (
+    <button
+      type="button"
+      className={`theme-toggle ${theme === 'dark' ? 'is-dark' : ''}`}
+      onClick={toggleTheme}
+      aria-label={`Switch to ${nextTheme} mode`}
+      title={`Switch to ${nextTheme} mode`}
+    >
+      <span className="theme-toggle__track" aria-hidden="true">
+        <span className="theme-toggle__thumb">
+          <svg
+            className="theme-toggle__icon theme-toggle__icon--sun"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2.5v2.5M12 19v2.5M21.5 12H19M5 12H2.5M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8M18.7 18.7l-1.8-1.8M7.1 7.1 5.3 5.3" />
+          </svg>
+          <svg
+            className="theme-toggle__icon theme-toggle__icon--moon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M20 14.5A7.5 7.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z" />
+          </svg>
+        </span>
+      </span>
+      <span className="theme-toggle__label">{theme === 'light' ? 'Light' : 'Dark'}</span>
+    </button>
   )
 }
