@@ -1,12 +1,13 @@
 import type { ReactElement } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
-import { findAppRoute } from './app-data'
-import { AuthProvider, getDefaultAppPath, hasOrgRole, hasSystemRole, useAuth } from './auth-context'
+import { AuthProvider, getDefaultAppPath, useAuth } from './auth-context'
 import { AppShell, AppViewport } from './components/layout'
-import { NotificationProvider } from './notifications-context'
+import { NotificationProvider } from './features/notifications/context'
+import { canViewRoute, findAppRoute } from './lib/access'
 import { ThemeProvider } from './theme-context'
 import {
+  ChecklistBatchDetailPage,
   ChecklistPage,
   DashboardPage,
   DiscordLinksPage,
@@ -20,7 +21,9 @@ import {
   OpenClawPage,
   OrganizationsPage,
   ProfilePage,
+  ProjectDetailPage,
   ProjectsPage,
+  ReportDetailPage,
   ReportsPage,
   SettingsPage,
   SignupPage,
@@ -88,13 +91,16 @@ function App() {
                   <Route path="dashboard" element={<GuardedAppRoute path="/app/dashboard"><DashboardPage /></GuardedAppRoute>} />
                   <Route path="organizations" element={<GuardedAppRoute path="/app/organizations"><OrganizationsPage /></GuardedAppRoute>} />
                   <Route path="projects" element={<GuardedAppRoute path="/app/projects"><ProjectsPage /></GuardedAppRoute>} />
+                  <Route path="projects/:projectId" element={<GuardedAppRoute path="/app/projects"><ProjectDetailPage /></GuardedAppRoute>} />
                   <Route path="reports" element={<GuardedAppRoute path="/app/reports"><ReportsPage /></GuardedAppRoute>} />
+                  <Route path="reports/:issueId" element={<GuardedAppRoute path="/app/reports"><ReportDetailPage /></GuardedAppRoute>} />
                   <Route path="profile" element={<GuardedAppRoute path="/app/profile"><ProfilePage /></GuardedAppRoute>} />
                   <Route path="notifications" element={<GuardedAppRoute path="/app/notifications"><NotificationsPage /></GuardedAppRoute>} />
                   <Route path="super-admin" element={<GuardedAppRoute path="/app/super-admin"><SuperAdminPage /></GuardedAppRoute>} />
                   <Route path="openclaw" element={<GuardedAppRoute path="/app/openclaw"><OpenClawPage /></GuardedAppRoute>} />
                   <Route path="manage-users" element={<GuardedAppRoute path="/app/manage-users"><ManageUsersPage /></GuardedAppRoute>} />
                   <Route path="checklist" element={<GuardedAppRoute path="/app/checklist"><ChecklistPage /></GuardedAppRoute>} />
+                  <Route path="checklist/batches/:batchId" element={<GuardedAppRoute path="/app/checklist"><ChecklistBatchDetailPage /></GuardedAppRoute>} />
                   <Route path="discord-links" element={<GuardedAppRoute path="/app/discord-links"><DiscordLinksPage /></GuardedAppRoute>} />
                   <Route path="settings" element={<GuardedAppRoute path="/app/settings"><SettingsPage /></GuardedAppRoute>} />
                 </Route>
@@ -143,17 +149,13 @@ function AppIndexRedirect() {
 
 function GuardedAppRoute({ path, children }: { path: string; children: ReactElement }) {
   const route = findAppRoute(path)
-  const { session, hasActiveOrg } = useAuth()
+  const { session } = useAuth()
 
-  if (route.requiresOrg && !hasActiveOrg) {
+  if (route.requiresOrg && !session?.memberships.find((membership) => membership.org_id === session.activeOrgId)) {
     return <Navigate to="/app/organizations" replace />
   }
 
-  if (route.requiredSystemRole && !hasSystemRole(session, route.requiredSystemRole)) {
-    return <Navigate to={getDefaultAppPath(session)} replace />
-  }
-
-  if (route.requiredOrgRole && !hasOrgRole(session, route.requiredOrgRole)) {
+  if (!canViewRoute(session, route.key)) {
     return <Navigate to={getDefaultAppPath(session)} replace />
   }
 

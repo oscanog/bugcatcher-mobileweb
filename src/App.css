@@ -2383,6 +2383,88 @@
   100% { opacity: 0; }
 }
 
+.input-inline,
+.textarea-inline,
+.select-inline {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.input-inline::placeholder,
+.textarea-inline::placeholder {
+  color: var(--input-placeholder);
+}
+
+.textarea-inline {
+  min-height: 116px;
+  resize: vertical;
+}
+
+.select-inline {
+  padding-right: 40px;
+}
+
+.inline-form {
+  display: grid;
+  gap: 12px;
+}
+
+.action-row {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-card-muted);
+}
+
+.action-row__controls {
+  display: grid;
+  gap: 10px;
+}
+
+.member-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-card-muted);
+}
+
+.member-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.member-card p {
+  color: var(--text-muted);
+}
+
+.list-row--button {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+}
+
+.list-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 @media (max-width: 420px) {
   .animation-stage {
     height: 150px;

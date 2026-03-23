@@ -1,11 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { API_BASE_PATH, ApiError, getErrorMessage, requestJson } from './lib/api'
+import { getActiveMembership, getDefaultAppPath, hasOrgRole, hasSystemRole } from './lib/access'
 
 export type SystemRole = 'super_admin' | 'admin' | 'user'
 export type OrgRole =
@@ -92,15 +88,6 @@ interface AuthContextValue {
   setActiveOrg: (orgId: number) => Promise<AuthActionResult>
 }
 
-interface ApiEnvelope<T> {
-  ok: boolean
-  data?: T
-  error?: {
-    code?: string
-    message?: string
-  }
-}
-
 interface LoginResponse {
   user: AuthUser
   active_org_id: number
@@ -129,17 +116,7 @@ interface RefreshResponse {
 }
 
 const AUTH_STORAGE_KEY = 'bugcatcher-mobileweb-auth-session'
-const DEFAULT_API_BASE_PATH = '/api/v1'
-const API_BASE_PATH = (import.meta.env.VITE_API_BASE_PATH?.trim() || DEFAULT_API_BASE_PATH).replace(/\/+$/, '')
-
-class ApiError extends Error {
-  status: number
-
-  constructor(status: number, message: string) {
-    super(message)
-    this.status = status
-  }
-}
+export { API_BASE_PATH, getDefaultAppPath, hasOrgRole, hasSystemRole }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
@@ -193,35 +170,6 @@ function persistStoredTokens(session: StoredTokens | null) {
   window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session))
 }
 
-async function requestJson<T>(
-  path: string,
-  init: RequestInit = {},
-  accessToken?: string,
-): Promise<T> {
-  const headers = new Headers(init.headers)
-  if (!headers.has('Accept')) {
-    headers.set('Accept', 'application/json')
-  }
-  if (accessToken) {
-    headers.set('Authorization', `Bearer ${accessToken}`)
-  }
-  if (init.body && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json')
-  }
-
-  const response = await fetch(`${API_BASE_PATH}${path}`, {
-    ...init,
-    headers,
-  })
-
-  const envelope = (await response.json()) as ApiEnvelope<T>
-  if (!response.ok || !envelope.ok || envelope.data === undefined) {
-    throw new ApiError(response.status, envelope.error?.message || 'Request failed.')
-  }
-
-  return envelope.data
-}
-
 function buildStoredTokens(payload: LoginResponse['tokens'] | RefreshResponse['tokens'], activeOrgId: number): StoredTokens {
   const now = Date.now()
   return {
@@ -243,35 +191,6 @@ function buildSession(me: MeResponse, tokens: StoredTokens): AuthSession {
     },
     memberships: me.memberships,
   }
-}
-
-function getActiveMembership(session: AuthSession | null): Membership | null {
-  if (!session) {
-    return null
-  }
-
-  return session.memberships.find((membership) => membership.org_id === session.activeOrgId) ?? null
-}
-
-export function getDefaultAppPath(session: AuthSession | null): string {
-  if (!session) {
-    return '/login'
-  }
-
-  return session.activeOrgId > 0 ? '/app/dashboard' : '/app/organizations'
-}
-
-export function hasSystemRole(session: AuthSession | null, role: SystemRole): boolean {
-  return session?.user.role === role
-}
-
-export function hasOrgRole(session: AuthSession | null, role: OrgRole): boolean {
-  const activeMembership = getActiveMembership(session)
-  return activeMembership?.role === role
-}
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -332,7 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     memberships: session?.memberships ?? [],
     activeMembership,
     activeOrgId: session?.activeOrgId ?? 0,
-    hasActiveOrg: (session?.activeOrgId ?? 0) > 0,
+    hasActiveOrg: Boolean(activeMembership),
     defaultAppPath: getDefaultAppPath(session),
     login: async ({ email, password, activeOrgId }) => {
       try {
@@ -367,7 +286,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           )
         }
       } catch {
-        // Logout should still clear local auth state even if the server request fails.
+        // Clear local auth even if the server request fails.
       }
 
       applySession(null)

@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { bottomNavItems, findAppRoute, type IconName } from '../app-data'
-import { hasOrgRole, hasSystemRole, useAuth } from '../auth-context'
-import { useNotifications } from '../notifications-context'
+import { useAuth } from '../auth-context'
+import { useNotifications } from '../features/notifications/context'
+import { bottomNavItems, findAppRoute, getSidebarItems } from '../lib/access'
 import { useTheme } from '../theme-context'
 import { BrandMark, Icon, ThemeToggle } from './ui'
 
@@ -25,25 +25,7 @@ export function AppShell() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const { unreadCount } = useNotifications()
   const { activeMembership, defaultAppPath, logout, session, user } = useAuth()
-
-  const drawerItems: Array<{
-    label: string
-    to: string
-    icon: IconName
-    tone?: 'default' | 'danger'
-  }> = [
-    ...(hasSystemRole(session, 'super_admin')
-      ? [
-          { label: 'Super Admin', to: '/app/super-admin', icon: 'shield' as const },
-          { label: 'OpenClaw', to: '/app/openclaw', icon: 'spark' as const },
-        ]
-      : []),
-    { label: 'Checklist', to: '/app/checklist', icon: 'checklist' },
-    { label: 'Discord Link', to: '/app/discord-links', icon: 'discord' },
-    ...(hasOrgRole(session, 'owner') ? [{ label: 'Manage Users', to: '/app/manage-users', icon: 'users' as const }] : []),
-    { label: 'Settings', to: '/app/settings', icon: 'settings' },
-    { label: 'Logout', to: '/login', icon: 'logout', tone: 'danger' },
-  ]
+  const drawerItems = getSidebarItems(session)
 
   return (
     <div className="app-shell">
