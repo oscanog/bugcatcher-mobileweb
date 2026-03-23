@@ -2,30 +2,44 @@
 
 set -euo pipefail
 
-RELEASE_DIR="${1:?usage: deploy-mobileweb.sh <release-dir>}"
 APP_NAME="bugcatcher-mobileweb"
-WEB_ROOT="/var/www/${APP_NAME}"
+REPO_DIR="${REPO_DIR:-/var/www/${APP_NAME}}"
+REPO_URL="${REPO_URL:-https://github.com/oscanog/bugcatcher-mobileweb.git}"
+BRANCH="${BRANCH:-main}"
+WEB_ROOT="${REPO_DIR}/dist"
 NGINX_AVAILABLE="/etc/nginx/sites-available/${APP_NAME}.conf"
 NGINX_ENABLED="/etc/nginx/sites-enabled/${APP_NAME}.conf"
-NGINX_SOURCE="${RELEASE_DIR}/infra/nginx/bugcatcher-mobileweb.conf"
-DIST_SOURCE="${RELEASE_DIR}/dist"
+NGINX_SOURCE="${REPO_DIR}/infra/nginx/bugcatcher-mobileweb.conf"
 CERT_NAME="${APP_NAME}"
 CERT_FULLCHAIN="/etc/letsencrypt/live/${CERT_NAME}/fullchain.pem"
 
-if [ ! -d "${DIST_SOURCE}" ]; then
-  echo "dist directory is missing from release bundle" >&2
+if [ ! -d "${REPO_DIR}/.git" ]; then
+  sudo mkdir -p "$(dirname "${REPO_DIR}")"
+  sudo git clone --branch "${BRANCH}" "${REPO_URL}" "${REPO_DIR}"
+  sudo chown -R "${USER}:${USER}" "${REPO_DIR}"
+fi
+
+sudo chown -R "${USER}:${USER}" "${REPO_DIR}"
+git -C "${REPO_DIR}" fetch origin
+git -C "${REPO_DIR}" checkout "${BRANCH}"
+git -C "${REPO_DIR}" pull --ff-only origin "${BRANCH}"
+
+cd "${REPO_DIR}"
+npm ci
+npm run build
+
+if [ ! -d "${WEB_ROOT}" ]; then
+  echo "dist directory is missing after build" >&2
   exit 1
 fi
 
 if [ ! -f "${NGINX_SOURCE}" ]; then
-  echo "nginx config is missing from release bundle" >&2
+  echo "nginx config is missing from repository" >&2
   exit 1
 fi
 
-sudo mkdir -p "${WEB_ROOT}"
-sudo rsync -a --delete "${DIST_SOURCE}/" "${WEB_ROOT}/"
-sudo mkdir -p "${WEB_ROOT}/.well-known/acme-challenge"
-sudo chown -R www-data:www-data "${WEB_ROOT}"
+mkdir -p "${WEB_ROOT}/.well-known/acme-challenge"
+chmod -R a+rX "${WEB_ROOT}"
 
 if [ ! -f "${CERT_FULLCHAIN}" ]; then
   BOOTSTRAP_CONFIG="$(mktemp)"
@@ -36,7 +50,7 @@ server {
     listen [::]:80;
     server_name m.bugcatcher.online mobile.bugcatcher.online;
 
-    root /var/www/bugcatcher-mobileweb;
+    root /var/www/bugcatcher-mobileweb/dist;
     index index.html;
 
     location /.well-known/acme-challenge/ {
