@@ -189,17 +189,22 @@ export function ReportDetailPage() {
   const load = useCallback(async () => {
     if (!session?.accessToken || !activeOrgId || !numericIssueId) {
       setData(null)
+      setMembers([])
       return
     }
 
     try {
-      const [issueResult, membersResult] = await Promise.all([
-        fetchIssue(session.accessToken, activeOrgId, numericIssueId),
-        fetchOrganizationMembers(session.accessToken, activeOrgId),
-      ])
+      const issueResult = await fetchIssue(session.accessToken, activeOrgId, numericIssueId)
       setData(issueResult)
-      setMembers(membersResult.members)
       setError('')
+
+      try {
+        const membersResult = await fetchOrganizationMembers(session.accessToken, activeOrgId)
+        setMembers(membersResult.members)
+      } catch {
+        // Some roles can view an issue without being allowed to list org members.
+        setMembers([])
+      }
     } catch (loadError) {
       setError(getErrorMessage(loadError, 'Unable to load issue detail.'))
     }
