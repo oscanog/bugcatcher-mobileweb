@@ -103,7 +103,6 @@ export interface ChecklistItemUpdatePayload {
   priority?: string
   required_role?: string
   assigned_to_user_id?: number
-  status?: string
 }
 
 export function fetchChecklistBatches(
@@ -140,6 +139,20 @@ export function updateChecklistItem(accessToken: string, orgId: number, itemId: 
     {
       method: 'PATCH',
       body: JSON.stringify(payload),
+    },
+    accessToken,
+  )
+}
+
+export function updateChecklistItemStatus(accessToken: string, orgId: number, itemId: number, status: string) {
+  return requestJson<{ item: ChecklistItem }>(
+    withOrgQuery('/checklist/item_status', orgId),
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        item_id: itemId,
+        status,
+      }),
     },
     accessToken,
   )

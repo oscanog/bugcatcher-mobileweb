@@ -6,6 +6,7 @@ import {
   deleteChecklistItem,
   fetchChecklistItem,
   updateChecklistItem,
+  updateChecklistItemStatus,
   type ChecklistAssigneeOption,
   type ChecklistItemDetailResponse,
 } from '../../features/checklist/api'
@@ -173,7 +174,7 @@ export function ChecklistItemDetailPage() {
     }
 
     if (statusDraft === data.item.status) {
-       return
+      return
     }
 
     setIsSavingStatus(true)
@@ -181,9 +182,7 @@ export function ChecklistItemDetailPage() {
     setMessage('')
 
     try {
-      await updateChecklistItem(session.accessToken, activeOrgId, data.item.id, {
-        status: statusDraft,
-      })
+      await updateChecklistItemStatus(session.accessToken, activeOrgId, data.item.id, statusDraft)
       await load()
       setMessage('Status updated.')
     } catch (saveError) {
