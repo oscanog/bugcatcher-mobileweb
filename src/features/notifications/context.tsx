@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAuth } from '../../auth-context'
+import { fetchChecklistItem } from '../checklist/api'
 import { normalizeNotificationDestination } from '../../lib/access'
 import { getErrorMessage } from '../../lib/api'
 import {
@@ -309,9 +310,33 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               current.map((item) => (item.id === notificationId ? result.notification : item)),
             )
             setUnreadCount((current) => Math.max(0, current - 1))
-            return normalizeNotificationDestination(session, result.notification.link_path)
+            const nextPath = normalizeNotificationDestination(session, result.notification.link_path)
+            if (result.notification.checklist_item_id && nextPath.startsWith('/app/checklist/items/')) {
+              const orgId = result.notification.org_id ?? session.activeOrgId
+              if (orgId > 0) {
+                try {
+                  await fetchChecklistItem(session.accessToken, orgId, result.notification.checklist_item_id)
+                } catch {
+                  setError('This checklist item is no longer assigned to you.')
+                  return '/app/notifications'
+                }
+              }
+            }
+            return nextPath
           } catch (markError) {
             setError(getErrorMessage(markError, 'Unable to open notification.'))
+          }
+        }
+
+        if (notification.checklist_item_id && fallback.startsWith('/app/checklist/items/')) {
+          const orgId = notification.org_id ?? session.activeOrgId
+          if (orgId > 0) {
+            try {
+              await fetchChecklistItem(session.accessToken, orgId, notification.checklist_item_id)
+            } catch {
+              setError('This checklist item is no longer assigned to you.')
+              return '/app/notifications'
+            }
           }
         }
 
