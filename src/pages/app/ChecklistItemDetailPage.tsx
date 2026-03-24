@@ -449,46 +449,6 @@ export function ChecklistItemDetailPage() {
             </>
           ) : null}
 
-          <div
-            className="checklist-mobile-actions"
-            style={{
-              position: 'fixed',
-              bottom: '80px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: 'calc(100% - 32px)',
-              maxWidth: '448px',
-              padding: '12px 16px',
-              background: 'var(--surface-card)',
-              border: '1px solid var(--border-soft)',
-              borderRadius: '24px',
-              display: 'flex',
-              gap: '12px',
-              zIndex: 10,
-              boxShadow: 'var(--shadow-card)',
-            }}
-          >
-            <button
-              type="button"
-              className="button button--primary"
-              style={{ flex: 1 }}
-              onClick={() => {
-                const el = document.querySelector('select.select-inline') as HTMLSelectElement | null;
-                el?.focus();
-                el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }}
-            >
-              Update Status
-            </button>
-            <button
-              type="button"
-              className="button"
-              style={{ flex: 1, backgroundColor: 'var(--surface-secondary)' }}
-              onClick={() => document.getElementById('evidence-upload')?.click()}
-            >
-              Upload Evidence
-            </button>
-          </div>
         </>
       ) : null}
     </div>
