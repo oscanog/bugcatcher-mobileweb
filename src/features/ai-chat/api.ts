@@ -25,6 +25,7 @@ export interface AIChatAttachment {
   mime_type: string
   file_size: number
   created_at: string
+  created_at_iso?: string | null
 }
 
 export interface AIGeneratedChecklistItem {
@@ -52,9 +53,13 @@ export interface AIGeneratedChecklistItem {
   approved_batch_id: number | null
   approved_item_id: number | null
   approved_at: string
+  approved_at_iso?: string | null
   rejected_at: string
+  rejected_at_iso?: string | null
   created_at: string
+  created_at_iso?: string | null
   updated_at: string
+  updated_at_iso?: string | null
 }
 
 export interface AIChatDraftContext {
@@ -80,7 +85,9 @@ export interface AIChatMessage {
   status: 'pending' | 'streaming' | 'completed' | 'failed'
   error_message: string
   created_at: string
+  created_at_iso?: string | null
   updated_at: string
+  updated_at_iso?: string | null
   attachments: AIChatAttachment[]
   generated_checklist_items: AIGeneratedChecklistItem[]
 }
@@ -91,8 +98,11 @@ export interface AIChatThread {
   user_id: number
   title: string
   created_at: string
+  created_at_iso?: string | null
   updated_at: string
+  updated_at_iso?: string | null
   last_message_at: string
+  last_message_at_iso?: string | null
   draft_context: AIChatDraftContext
   messages: AIChatMessage[]
 }

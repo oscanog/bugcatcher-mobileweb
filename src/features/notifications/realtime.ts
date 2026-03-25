@@ -1,4 +1,5 @@
 import type { NotificationRecord } from './api'
+import { parseApiDate } from '../../lib/datetime'
 
 const DEFAULT_NOTIFICATIONS_WS_PATH = '/ws/notifications'
 
@@ -44,8 +45,8 @@ export function parseNotificationRealtimeEvent(message: string): NotificationRea
 export function upsertNotificationRecord(current: NotificationRecord[], notification: NotificationRecord): NotificationRecord[] {
   const next = current.filter((item) => item.id !== notification.id)
   return [notification, ...next].sort((left, right) => {
-    const leftTime = new Date(left.created_at).getTime()
-    const rightTime = new Date(right.created_at).getTime()
+    const leftTime = parseApiDate(left.created_at, left.created_at_iso)?.getTime() ?? 0
+    const rightTime = parseApiDate(right.created_at, right.created_at_iso)?.getTime() ?? 0
     if (leftTime === rightTime) {
       return right.id - left.id
     }

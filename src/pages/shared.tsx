@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { SectionCard } from '../components/ui'
+import { formatApiChatTime, formatApiDateTime, formatApiRelativeTime } from '../lib/datetime'
 
 export function FormMessage({
   id,
@@ -57,81 +58,14 @@ export function initialsFromUsername(username: string): string {
   )
 }
 
-export function formatDateTime(value: string | null | undefined): string {
-  if (!value) {
-    return 'Not set'
-  }
-
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) {
-    return value
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(parsed)
+export function formatDateTime(value: string | null | undefined, isoValue?: string | null | undefined): string {
+  return formatApiDateTime(value, isoValue)
 }
 
-export function formatRelativeTime(value: string | null | undefined): string {
-  if (!value) {
-    return 'Now'
-  }
-
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) {
-    return value
-  }
-
-  const diffSeconds = Math.round((parsed.getTime() - Date.now()) / 1000)
-  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
-  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
-    ['day', 60 * 60 * 24],
-    ['hour', 60 * 60],
-    ['minute', 60],
-  ]
-
-  for (const [unit, size] of units) {
-    if (Math.abs(diffSeconds) >= size || unit === 'minute') {
-      return formatter.format(Math.round(diffSeconds / size), unit)
-    }
-  }
-
-  return formatter.format(diffSeconds, 'second')
+export function formatRelativeTime(value: string | null | undefined, isoValue?: string | null | undefined): string {
+  return formatApiRelativeTime(value, isoValue)
 }
 
-export function formatChatTime(value: string | null | undefined): string {
-  if (!value) {
-    return ''
-  }
-
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) {
-    return value
-  }
-
-  const now = Date.now()
-  const diffMs = now - parsed.getTime()
-  const diffSeconds = Math.floor(diffMs / 1000)
-
-  if (diffSeconds < 60) {
-    return 'just now'
-  }
-
-  const diffMinutes = Math.floor(diffSeconds / 60)
-  if (diffMinutes < 60) {
-    return `${diffMinutes}m ago`
-  }
-
-  const diffHours = Math.floor(diffMinutes / 60)
-  if (diffHours < 24) {
-    return `${diffHours}h ago`
-  }
-
-  const month = parsed.toLocaleString(undefined, { month: 'short' })
-  const day = parsed.getDate()
-  const year = String(parsed.getFullYear()).slice(-2)
-  return `${month} ${day}, ${year}`
+export function formatChatTime(value: string | null | undefined, isoValue?: string | null | undefined): string {
+  return formatApiChatTime(value, isoValue)
 }

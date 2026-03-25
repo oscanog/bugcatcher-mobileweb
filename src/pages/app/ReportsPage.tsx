@@ -339,7 +339,7 @@ export function ReportDetailPage() {
               <DetailPair label="Organization" value={data.issue.org_name} />
               <DetailPair label="Author" value={data.issue.author_username} />
               <DetailPair label="Active Role" value={issueMembership?.role ?? 'No org'} />
-              <DetailPair label="Created" value={formatDateTime(data.issue.created_at)} />
+              <DetailPair label="Created" value={formatDateTime(data.issue.created_at, data.issue.created_at_iso)} />
             </div>
             <p className="body-copy">{data.issue.description || 'No issue description provided.'}</p>
           </SectionCard>

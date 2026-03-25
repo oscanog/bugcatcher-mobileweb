@@ -14,6 +14,7 @@ export interface IssueAttachment {
   mime_type: string
   file_size: number
   uploaded_at: string
+  uploaded_at_iso?: string | null
 }
 
 export interface IssueRecord {
@@ -33,12 +34,19 @@ export interface IssueRecord {
   assigned_senior_qa_id: number
   assigned_qa_lead_id: number
   assigned_at: string
+  assigned_at_iso?: string | null
   junior_assigned_at: string
+  junior_assigned_at_iso?: string | null
   junior_done_at: string
+  junior_done_at_iso?: string | null
   qa_assigned_at: string
+  qa_assigned_at_iso?: string | null
   senior_qa_assigned_at: string
+  senior_qa_assigned_at_iso?: string | null
   qa_lead_assigned_at: string
+  qa_lead_assigned_at_iso?: string | null
   created_at: string
+  created_at_iso?: string | null
   labels: IssueLabel[]
   attachments: IssueAttachment[]
 }

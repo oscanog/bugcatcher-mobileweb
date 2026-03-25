@@ -18,7 +18,9 @@ export interface ChecklistBatch {
   notes: string | null
   page_url: string | null
   created_at: string
+  created_at_iso?: string | null
   updated_at: string | null
+  updated_at_iso?: string | null
   project_name: string
   qa_lead_name: string | null
   created_by_name: string
@@ -51,9 +53,13 @@ export interface ChecklistItem {
   updated_by: number | null
   issue_id: number | null
   started_at: string | null
+  started_at_iso?: string | null
   completed_at: string | null
+  completed_at_iso?: string | null
   created_at: string
+  created_at_iso?: string | null
   updated_at: string | null
+  updated_at_iso?: string | null
   assigned_to_name: string | null
   created_by_name: string
   updated_by_name: string | null
@@ -81,6 +87,7 @@ export interface ChecklistAttachment {
   file_size?: number
   uploaded_by_name?: string | null
   created_at?: string
+  created_at_iso?: string | null
   source_type?: string
 }
 

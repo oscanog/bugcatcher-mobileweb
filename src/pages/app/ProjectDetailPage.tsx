@@ -105,8 +105,8 @@ export function ProjectDetailPage() {
             <div className="detail-pairs">
               <DetailPair label="Status" value={data.project.status} />
               <DetailPair label="Organization" value={data.project.org_name} />
-              <DetailPair label="Created" value={formatDateTime(data.project.created_at)} />
-              <DetailPair label="Updated" value={formatDateTime(data.project.updated_at || data.project.created_at)} />
+              <DetailPair label="Created" value={formatDateTime(data.project.created_at, data.project.created_at_iso)} />
+              <DetailPair label="Updated" value={formatDateTime(data.project.updated_at || data.project.created_at, data.project.updated_at_iso || data.project.created_at_iso)} />
               <DetailPair label="Batches" value={`${data.batches.length}`} />
             </div>
           </SectionCard>

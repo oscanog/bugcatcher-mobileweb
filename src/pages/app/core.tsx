@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth-context'
+import { BugGreetingMascot } from '../../components/BugGreetingMascot'
 import { getErrorMessage } from '../../lib/api'
 import { AuthField, DetailPair, Icon, ListRow, SectionCard, StatCard, StatusTile } from '../../components/ui'
 import {
   fetchDashboardSummary,
+  type DashboardSummary,
   type DashboardQaLeadChecklistProject,
   type DashboardQaLeadChecklistRow,
   type DashboardSummaryResponse,
@@ -27,6 +29,7 @@ import {
   leaveOrganization,
   type OrganizationsResponse,
 } from '../../features/organizations/api'
+import { formatAppLiveDateTime, getFirstName, getGreetingPeriod } from '../../lib/datetime'
 import { EmptySection, FormMessage, LoadingSection, formatRelativeTime, initialsFromUsername } from '../shared'
 
 function DashboardChecklistWorkloadRow({ row }: { row: DashboardQaLeadChecklistRow }) {
@@ -68,10 +71,29 @@ function formatProfileLabel(value: string): string {
     .replace(/\b\w/g, (match) => match.toUpperCase())
 }
 
+function buildDashboardGreetingMessage(summary: DashboardSummary, unreadCount: number): ReactNode {
+  if (unreadCount > 0) {
+    return `You have ${unreadCount} unread notifications. Let's clear the important ones first.`
+  }
+
+  if (summary.open_issues > 0 || summary.checklist_open_items > 0) {
+    return (
+      <>
+        {summary.open_issues} open <span className="dashboard-hero__message-issues">issues</span> and {summary.checklist_open_items}{' '}
+        checklist items are moving today.
+      </>
+    )
+  }
+
+  return 'Quiet queue. Good time to review projects and prep the next pass.'
+}
+
 export function DashboardPage() {
-  const { activeOrgId, activeScope, selectionLabel, session } = useAuth()
+  const { activeOrgId, activeScope, selectionLabel, session, user } = useAuth()
+  const { unreadCount } = useNotifications()
   const [data, setData] = useState<DashboardSummaryResponse | null>(null)
   const [error, setError] = useState('')
+  const [heroLiveLabel, setHeroLiveLabel] = useState(() => formatAppLiveDateTime())
 
   useEffect(() => {
     const run = async () => {
@@ -92,6 +114,16 @@ export function DashboardPage() {
     void run()
   }, [activeOrgId, activeScope, session?.accessToken])
 
+  useEffect(() => {
+    const syncLabel = () => {
+      setHeroLiveLabel(formatAppLiveDateTime())
+    }
+
+    syncLabel()
+    const intervalId = window.setInterval(syncLabel, 30000)
+    return () => window.clearInterval(intervalId)
+  }, [])
+
   if (activeScope === 'none') {
     return <EmptySection title="Dashboard" message="Set an active organization first." />
   }
@@ -102,6 +134,9 @@ export function DashboardPage() {
 
   const trendMax = Math.max(1, ...(data?.trend ?? []).flatMap((entry) => [entry.issues, entry.projects, entry.checklist]))
   const barHeight = (value: number) => `${Math.max(12, (value / trendMax) * 100)}%`
+  const greetingPeriod = getGreetingPeriod()
+  const firstName = getFirstName(user?.username)
+  const greetingMessage = data ? buildDashboardGreetingMessage(data.summary, unreadCount) : ''
 
   return (
     <div className="page-stack">
@@ -109,6 +144,30 @@ export function DashboardPage() {
 
       {data ? (
         <>
+          <section className="dashboard-greeting" data-testid="dashboard-greeting-hero" aria-labelledby="dashboard-greeting-heading">
+            <div className="dashboard-hero">
+              <div className="dashboard-hero__mascot" data-testid="dashboard-greeting-mascot">
+                <BugGreetingMascot />
+              </div>
+              <div className="dashboard-hero__copy">
+                <p className="dashboard-hero__eyebrow" data-testid="dashboard-greeting-live-label">
+                  <span className="dashboard-hero__eyebrow-icon" aria-hidden="true">
+                    <Icon name="clock" />
+                  </span>
+                  <span>{heroLiveLabel}</span>
+                </p>
+                <h2 id="dashboard-greeting-heading">
+                  <span className="dashboard-hero__heading-prefix">Good {greetingPeriod},</span>
+                  <span className="dashboard-hero__heading-name">{firstName}!</span>
+                </h2>
+                <div className="dashboard-hero__message" data-testid="dashboard-greeting-message">
+                  <span className="dashboard-hero__message-label">Bug buddy</span>
+                  <p>{greetingMessage}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <SectionCard title="Live Summary" subtitle={`${data.org.org_name} • ${data.scope}`}>
             <div className="stats-grid">
               <StatCard stat={{ label: 'Open Issues', value: `${data.summary.open_issues}`, note: 'active', tone: 'alert' }} />
@@ -720,7 +779,7 @@ export function NotificationsPage() {
                   icon={item.severity === 'alert' ? 'alert' : item.severity === 'success' ? 'checklist' : 'activity'}
                   title={item.title}
                   detail={item.body}
-                  meta={formatRelativeTime(item.created_at)}
+                  meta={formatRelativeTime(item.created_at, item.created_at_iso)}
                   tone={item.severity}
                   readState={item.read_at ? 'read' : 'unread'}
                   action={<span className={`notif-chip ${item.read_at ? 'is-read' : 'is-unread'}`}>{item.read_at ? 'Read' : 'Unread'}</span>}

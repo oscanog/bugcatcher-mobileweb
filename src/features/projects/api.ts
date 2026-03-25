@@ -11,7 +11,9 @@ export interface ProjectSummary {
   created_by: number
   updated_by: number | null
   created_at: string
+  created_at_iso?: string | null
   updated_at: string | null
+  updated_at_iso?: string | null
 }
 
 export interface ChecklistBatchSummary {

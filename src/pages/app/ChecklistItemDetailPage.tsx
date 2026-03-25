@@ -365,10 +365,10 @@ export function ChecklistItemDetailPage() {
             <div className="detail-pairs">
               <DetailPair label="Created By" value={data.item.created_by_name} />
               <DetailPair label="Updated By" value={data.item.updated_by_name || 'Not updated'} />
-              <DetailPair label="Created At" value={formatDateTime(data.item.created_at)} />
-              <DetailPair label="Updated At" value={formatDateTime(data.item.updated_at)} />
-              <DetailPair label="Started At" value={formatDateTime(data.item.started_at)} />
-              <DetailPair label="Completed At" value={formatDateTime(data.item.completed_at)} />
+              <DetailPair label="Created At" value={formatDateTime(data.item.created_at, data.item.created_at_iso)} />
+              <DetailPair label="Updated At" value={formatDateTime(data.item.updated_at, data.item.updated_at_iso)} />
+              <DetailPair label="Started At" value={formatDateTime(data.item.started_at, data.item.started_at_iso)} />
+              <DetailPair label="Completed At" value={formatDateTime(data.item.completed_at, data.item.completed_at_iso)} />
             </div>
           </SectionCard>
 

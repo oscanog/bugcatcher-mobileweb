@@ -14,7 +14,9 @@ export interface NotificationRecord {
   severity: 'default' | 'success' | 'alert'
   link_path: string
   read_at: string | null
+  read_at_iso?: string | null
   created_at: string
+  created_at_iso?: string | null
   org_id: number | null
   project_id: number | null
   issue_id: number | null

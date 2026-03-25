@@ -23,7 +23,7 @@ import { fetchProjects, type ProjectSummary } from '../../features/projects/api'
 import { getErrorMessage } from '../../lib/api'
 import { EmptySection, FormMessage, LoadingSection, formatChatTime } from '../shared'
 
-type ThreadSummary = Pick<AIChatThread, 'id' | 'title' | 'created_at' | 'updated_at' | 'last_message_at' | 'draft_context'>
+type ThreadSummary = Pick<AIChatThread, 'id' | 'title' | 'created_at' | 'created_at_iso' | 'updated_at' | 'updated_at_iso' | 'last_message_at' | 'last_message_at_iso' | 'draft_context'>
 
 type DraftFormState = {
   projectId: number
@@ -651,7 +651,7 @@ export function AIChatPage() {
                       <div className="ai-chat-thread-card__body">
                         <strong>{thread.title}</strong>
                         <span>{formatThreadContextLabel(thread.draft_context)}</span>
-                        <span>{formatChatTime(thread.last_message_at || thread.updated_at || thread.created_at)}</span>
+                        <span>{formatChatTime(thread.last_message_at || thread.updated_at || thread.created_at, thread.last_message_at_iso || thread.updated_at_iso || thread.created_at_iso)}</span>
                       </div>
                       <button
                         type="button"

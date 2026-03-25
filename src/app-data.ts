@@ -18,6 +18,7 @@ export type IconName =
   | 'mail'
   | 'search'
   | 'globe'
+  | 'clock'
   | 'eye'
   | 'eye-off'
   | 'chat'

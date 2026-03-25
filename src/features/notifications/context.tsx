@@ -141,7 +141,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (payload.type === 'notification.read_all') {
         const readAt = payload.timestamp ?? new Date().toISOString()
         setNotifications((current) =>
-          current.map((item) => (item.read_at ? item : { ...item, read_at: readAt })),
+          current.map((item) => (item.read_at ? item : { ...item, read_at: readAt, read_at_iso: readAt })),
         )
       }
 
@@ -289,7 +289,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         try {
           await markAllNotificationsRead(session.accessToken)
           setNotifications((current) =>
-            current.map((item) => (item.read_at ? item : { ...item, read_at: new Date().toISOString() })),
+            current.map((item) => {
+              if (item.read_at) {
+                return item
+              }
+
+              const readAt = new Date().toISOString()
+              return { ...item, read_at: readAt, read_at_iso: readAt }
+            }),
           )
           setUnreadCount(0)
         } catch (markError) {
