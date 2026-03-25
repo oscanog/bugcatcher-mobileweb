@@ -3,6 +3,7 @@ import { requestJson, withOrgQuery } from '../../lib/api'
 export interface ProjectSummary {
   id: number
   org_id: number
+  org_name: string
   name: string
   code: string | null
   description: string | null
@@ -15,6 +16,8 @@ export interface ProjectSummary {
 
 export interface ChecklistBatchSummary {
   id: number
+  org_id?: number
+  org_name?: string
   title: string
   status: string
   module_name: string
@@ -29,7 +32,7 @@ export interface ChecklistBatchSummary {
 
 export interface ProjectsResponse {
   org: {
-    org_id: number
+    org_id: number | null
     org_name: string
   }
   projects: ProjectSummary[]
@@ -40,11 +43,12 @@ export interface ProjectDetailResponse {
   batches: ChecklistBatchSummary[]
 }
 
-export function fetchProjects(accessToken: string, orgId: number, show: 'active' | 'all' = 'active') {
-  return requestJson<ProjectsResponse>(`${withOrgQuery('/projects', orgId)}&show=${show}`, { method: 'GET' }, accessToken)
+export function fetchProjects(accessToken: string, orgId?: number | null, show: 'active' | 'all' = 'active') {
+  const path = withOrgQuery('/projects', orgId)
+  return requestJson<ProjectsResponse>(`${path}${path.includes('?') ? '&' : '?'}show=${show}`, { method: 'GET' }, accessToken)
 }
 
-export function fetchProject(accessToken: string, orgId: number, projectId: number) {
+export function fetchProject(accessToken: string, orgId: number | null | undefined, projectId: number) {
   return requestJson<ProjectDetailResponse>(withOrgQuery(`/projects/${projectId}`, orgId), { method: 'GET' }, accessToken)
 }
 

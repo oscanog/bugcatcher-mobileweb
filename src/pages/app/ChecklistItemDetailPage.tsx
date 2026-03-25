@@ -70,7 +70,7 @@ function buildDraft(data: ChecklistItemDetailResponse): ItemDraftState {
 export function ChecklistItemDetailPage() {
   const { itemId } = useParams()
   const navigate = useNavigate()
-  const { activeOrgId, session } = useAuth()
+  const { activeOrgId, activeScope, getMembershipForOrg, session } = useAuth()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [data, setData] = useState<ChecklistItemDetailResponse | null>(null)
   const [draft, setDraft] = useState<ItemDraftState | null>(null)
@@ -85,20 +85,21 @@ export function ChecklistItemDetailPage() {
   const [statusDraft, setStatusDraft] = useState('open')
 
   const numericItemId = Number(itemId)
-  const canManageItem = canManageChecklist(session)
+  const itemMembership = data ? getMembershipForOrg(data.item.org_id) : null
+  const canManageItem = canManageChecklist(session, itemMembership)
 
   const load = useCallback(async () => {
-    if (!session?.accessToken || !activeOrgId || !numericItemId) {
+    if (!session?.accessToken || (activeScope === 'org' && !activeOrgId) || !numericItemId) {
       setData(null)
       return
     }
 
-    const result = await fetchChecklistItem(session.accessToken, activeOrgId, numericItemId)
+    const result = await fetchChecklistItem(session.accessToken, activeScope === 'org' ? activeOrgId : null, numericItemId)
     setData(result)
     setDraft(buildDraft(result))
     setAssignmentUserId(`${result.item.assigned_to_user_id ?? 0}`)
     setStatusDraft(result.item.status)
-  }, [activeOrgId, numericItemId, session?.accessToken])
+  }, [activeOrgId, activeScope, numericItemId, session?.accessToken])
 
   useEffect(() => {
     const run = async () => {
@@ -131,7 +132,7 @@ export function ChecklistItemDetailPage() {
   const selectedAssignee = assignableTesters.find((member) => member.user_id === (data?.item.assigned_to_user_id ?? 0))
 
   const handleAssignmentSave = async () => {
-    if (!session?.accessToken || !activeOrgId || !data || !hasAssignmentChanged) {
+    if (!session?.accessToken || !data || !hasAssignmentChanged) {
       return
     }
 
@@ -140,7 +141,7 @@ export function ChecklistItemDetailPage() {
     setMessage('')
 
     try {
-      await updateChecklistItem(session.accessToken, activeOrgId, data.item.id, {
+      await updateChecklistItem(session.accessToken, data.item.org_id, data.item.id, {
         assigned_to_user_id: Number(assignmentUserId) || 0,
       })
       await load()
@@ -154,7 +155,7 @@ export function ChecklistItemDetailPage() {
 
   const handleEditSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!session?.accessToken || !activeOrgId || !data || !draft) {
+    if (!session?.accessToken || !data || !draft) {
       return
     }
 
@@ -163,7 +164,7 @@ export function ChecklistItemDetailPage() {
     setMessage('')
 
     try {
-      await updateChecklistItem(session.accessToken, activeOrgId, data.item.id, {
+      await updateChecklistItem(session.accessToken, data.item.org_id, data.item.id, {
         sequence_no: Math.max(1, Number(draft.sequenceNo) || data.item.sequence_no),
         title: draft.title.trim(),
         module_name: draft.moduleName.trim(),
@@ -182,7 +183,7 @@ export function ChecklistItemDetailPage() {
   }
 
   const handleStatusSave = async () => {
-    if (!session?.accessToken || !activeOrgId || !data) {
+    if (!session?.accessToken || !data) {
       return
     }
 
@@ -195,7 +196,7 @@ export function ChecklistItemDetailPage() {
     setMessage('')
 
     try {
-      await updateChecklistItemStatus(session.accessToken, activeOrgId, data.item.id, statusDraft)
+      await updateChecklistItemStatus(session.accessToken, data.item.org_id, data.item.id, statusDraft)
       await load()
       setMessage('Status updated.')
     } catch (saveError) {
@@ -206,7 +207,7 @@ export function ChecklistItemDetailPage() {
   }
 
   const handleDelete = async () => {
-    if (!session?.accessToken || !activeOrgId || !data) {
+    if (!session?.accessToken || !data) {
       return
     }
 
@@ -220,7 +221,7 @@ export function ChecklistItemDetailPage() {
     setMessage('')
 
     try {
-      await deleteChecklistItem(session.accessToken, activeOrgId, data.item.id)
+      await deleteChecklistItem(session.accessToken, data.item.org_id, data.item.id)
       navigate(`/app/checklist/batches/${data.item.batch_id}`, { replace: true })
     } catch (deleteError) {
       setError(getErrorMessage(deleteError, 'Unable to delete checklist item.'))
@@ -230,7 +231,7 @@ export function ChecklistItemDetailPage() {
 
   const handleAttachmentUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
-    if (!session?.accessToken || !activeOrgId || !numericItemId || files.length === 0) {
+    if (!session?.accessToken || !data || !numericItemId || files.length === 0) {
       return
     }
 
@@ -238,7 +239,7 @@ export function ChecklistItemDetailPage() {
     setError('')
     setMessage('')
     try {
-      const result = await uploadChecklistItemAttachments(session.accessToken, activeOrgId, numericItemId, files)
+      const result = await uploadChecklistItemAttachments(session.accessToken, data.item.org_id, numericItemId, files)
       setData((current) => current ? { ...current, attachments: result.attachments } : current)
       setMessage(result.uploaded_count === 1 ? '1 attachment uploaded.' : `${result.uploaded_count} attachments uploaded.`)
       await load()
@@ -270,6 +271,7 @@ export function ChecklistItemDetailPage() {
           >
             <div className="detail-pairs">
               <DetailPair label="Sequence" value={`${data.item.sequence_no}`} />
+              <DetailPair label="Organization" value={data.item.org_name || 'Organization'} />
               <DetailPair label="Status" value={data.item.status} />
               <DetailPair label="Priority" value={data.item.priority} />
               <DetailPair label="Required Role" value={data.item.required_role} />

@@ -19,6 +19,7 @@ export interface IssueAttachment {
 export interface IssueRecord {
   id: number
   org_id: number
+  org_name: string
   title: string
   description: string
   status: string
@@ -44,7 +45,7 @@ export interface IssueRecord {
 
 export interface IssuesResponse {
   org: {
-    org_id: number
+    org_id: number | null
     org_name: string
     org_role: string
     is_org_owner: boolean
@@ -65,7 +66,7 @@ export interface IssuesResponse {
 
 export interface IssueDetailResponse {
   org: {
-    org_id: number
+    org_id: number | null
     org_name: string
     org_role: string
     is_org_owner: boolean
@@ -74,11 +75,12 @@ export interface IssueDetailResponse {
   issue: IssueRecord
 }
 
-export function fetchIssues(accessToken: string, orgId: number, status: 'open' | 'closed' = 'open') {
-  return requestJson<IssuesResponse>(`${withOrgQuery('/issues', orgId)}&status=${status}`, { method: 'GET' }, accessToken)
+export function fetchIssues(accessToken: string, orgId?: number | null, status: 'open' | 'closed' = 'open') {
+  const path = withOrgQuery('/issues', orgId)
+  return requestJson<IssuesResponse>(`${path}${path.includes('?') ? '&' : '?'}status=${status}`, { method: 'GET' }, accessToken)
 }
 
-export function fetchIssue(accessToken: string, orgId: number, issueId: number) {
+export function fetchIssue(accessToken: string, orgId: number | null | undefined, issueId: number) {
   return requestJson<IssueDetailResponse>(withOrgQuery(`/issues/${issueId}`, orgId), { method: 'GET' }, accessToken)
 }
 

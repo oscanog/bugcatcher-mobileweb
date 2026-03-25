@@ -1,5 +1,5 @@
 import type { IconName, NavItem } from '../app-data'
-import type { AuthSession, OrgRole, SystemRole } from '../auth-context'
+import type { AuthSession, Membership, OrgRole, SystemRole } from '../auth-context'
 
 export type AppRouteKey =
   | 'dashboard'
@@ -118,19 +118,28 @@ const sidebarItemDefinitions: SidebarItemDefinition[] = [
   { key: 'logout', label: 'Logout', to: '/login', icon: 'logout', tone: 'danger' },
 ]
 
+const allScopeEnabledRoutes: AppRouteKey[] = ['dashboard', 'projects', 'reports', 'checklist', 'checklist-item']
+const concreteSelectionRequiredRoutes: AppRouteKey[] = ['manage-users', 'ai-chat', 'super-admin', 'ai-admin']
+
 export function getActiveMembership(session: AuthSession | null) {
-  if (!session) {
+  if (!session || session.activeScope !== 'org') {
     return null
   }
   return session.memberships.find((membership) => membership.org_id === session.activeOrgId) ?? null
+}
+
+export function getMembershipForOrg(session: AuthSession | null, orgId: number): Membership | null {
+  if (!session) {
+    return null
+  }
+  return session.memberships.find((membership) => membership.org_id === orgId) ?? null
 }
 
 export function hasSystemRole(session: AuthSession | null, role: SystemRole): boolean {
   return session?.user.role === role
 }
 
-export function hasOrgRole(session: AuthSession | null, role: OrgRole): boolean {
-  const membership = getActiveMembership(session)
+export function hasOrgRole(session: AuthSession | null, role: OrgRole, membership = getActiveMembership(session)): boolean {
   if (!membership) {
     return false
   }
@@ -141,6 +150,9 @@ export function getDefaultAppPath(session: AuthSession | null): string {
   if (!session) {
     return '/login'
   }
+  if (session.activeScope === 'all') {
+    return '/app/dashboard'
+  }
   return getActiveMembership(session) ? '/app/dashboard' : '/app/organizations'
 }
 
@@ -148,23 +160,25 @@ export function findAppRoute(pathname: string): AppRouteDefinition {
   return appRoutes.find((route) => pathname === route.path || pathname.startsWith(`${route.path}/`)) ?? appRoutes[0]
 }
 
-export function canManageProjects(session: AuthSession | null): boolean {
-  const membership = getActiveMembership(session)
+export function canManageProjects(session: AuthSession | null, membership = getActiveMembership(session)): boolean {
   if (!membership) {
     return false
   }
   return membership.is_owner || membership.role === 'Project Manager' || membership.role === 'QA Lead'
 }
 
-export function canManageChecklist(session: AuthSession | null): boolean {
-  return canManageProjects(session)
+export function canManageChecklist(session: AuthSession | null, membership = getActiveMembership(session)): boolean {
+  return canManageProjects(session, membership)
 }
 
-export function canAccessChecklistItem(session: AuthSession | null): boolean {
-  return Boolean(getActiveMembership(session))
+export function canAccessChecklistItem(session: AuthSession | null, membership = getActiveMembership(session)): boolean {
+  return isSystemAdmin(session) || Boolean(membership)
 }
 
 export function canAccessAiChat(session: AuthSession | null): boolean {
+  if (session?.activeScope === 'all') {
+    return false
+  }
   const membership = getActiveMembership(session)
   if (!membership) {
     return false
@@ -177,6 +191,14 @@ export function canAccessAiChat(session: AuthSession | null): boolean {
   return membership.role === 'QA Lead'
 }
 
+export function requiresConcreteOrgSelection(routeKey: AppRouteKey): boolean {
+  return concreteSelectionRequiredRoutes.includes(routeKey)
+}
+
+function canUseAllScopeRoute(session: AuthSession | null, routeKey: AppRouteKey): boolean {
+  return Boolean(session?.activeScope === 'all' && isSystemAdmin(session) && allScopeEnabledRoutes.includes(routeKey))
+}
+
 export function canViewRoute(session: AuthSession | null, routeKey: AppRouteKey): boolean {
   const route = appRoutes.find((item) => item.key === routeKey)
   if (!route) {
@@ -185,13 +207,19 @@ export function canViewRoute(session: AuthSession | null, routeKey: AppRouteKey)
   if (route.requiresAuth && !session) {
     return false
   }
+  if (session?.activeScope === 'all' && requiresConcreteOrgSelection(route.key)) {
+    return false
+  }
 
   const activeMembership = getActiveMembership(session)
-  if (route.requiresOrg && !activeMembership) {
+  if (route.requiresOrg && !activeMembership && !canUseAllScopeRoute(session, route.key)) {
     return false
   }
   if (route.requiredSystemRole && !hasSystemRole(session, route.requiredSystemRole)) {
     return false
+  }
+  if (canUseAllScopeRoute(session, route.key)) {
+    return true
   }
   if (route.key === 'manage-users' && hasSystemRole(session, 'super_admin')) {
     return true
@@ -271,9 +299,9 @@ function isSystemAdmin(session: AuthSession | null): boolean {
 export function canPerformIssueAction(
   session: AuthSession | null,
   issue: IssueAccessSubject,
+  membership = getActiveMembership(session),
   action?: IssueWorkflowActionKey,
 ): boolean | Record<IssueWorkflowActionKey, boolean> {
-  const membership = getActiveMembership(session)
   const userId = session?.user.id ?? 0
   const orgRole = membership?.role ?? ''
   const isOwner = Boolean(membership?.is_owner || membership?.role === 'owner')

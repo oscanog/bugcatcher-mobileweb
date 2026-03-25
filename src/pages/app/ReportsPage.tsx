@@ -24,8 +24,9 @@ function isImageAttachment(attachment: { mime_type: string }) {
 }
 
 export function ReportsPage() {
-  const { activeOrgId, session } = useAuth()
+  const { activeOrgId, activeScope, lastOrgId, memberships, session } = useAuth()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [createOrgId, setCreateOrgId] = useState(0)
   const [status, setStatus] = useState<'open' | 'closed'>('open')
   const [data, setData] = useState<IssuesResponse | null>(null)
   const [title, setTitle] = useState('')
@@ -35,19 +36,24 @@ export function ReportsPage() {
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
 
+  useEffect(() => {
+    const fallbackOrgId = activeOrgId || lastOrgId || memberships[0]?.org_id || 0
+    setCreateOrgId((current) => current || fallbackOrgId)
+  }, [activeOrgId, lastOrgId, memberships])
+
   const load = useCallback(async (nextStatus = status) => {
-    if (!session?.accessToken || !activeOrgId) {
+    if (!session?.accessToken || (activeScope === 'org' && !activeOrgId) || activeScope === 'none') {
       setData(null)
       return
     }
     try {
-      const result = await fetchIssues(session.accessToken, activeOrgId, nextStatus)
+      const result = await fetchIssues(session.accessToken, activeScope === 'org' ? activeOrgId : null, nextStatus)
       setData(result)
       setError('')
     } catch (loadError) {
       setError(getErrorMessage(loadError, 'Unable to load issues.'))
     }
-  }, [activeOrgId, session?.accessToken, status])
+  }, [activeOrgId, activeScope, session?.accessToken, status])
 
   useEffect(() => {
     void load(status)
@@ -59,7 +65,8 @@ export function ReportsPage() {
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!session?.accessToken || !activeOrgId || !title.trim()) {
+    const targetOrgId = activeScope === 'all' ? createOrgId : activeOrgId
+    if (!session?.accessToken || !targetOrgId || !title.trim()) {
       return
     }
 
@@ -68,7 +75,7 @@ export function ReportsPage() {
     setError('')
     try {
       await createIssue(session.accessToken, {
-        org_id: activeOrgId,
+        org_id: targetOrgId,
         title: title.trim(),
         description: description.trim(),
         labels: [1],
@@ -96,6 +103,15 @@ export function ReportsPage() {
 
       <SectionCard title="Create Issue" subtitle="Any authenticated org member can open a bug">
         <form className="auth-stack" onSubmit={handleCreate}>
+          {activeScope === 'all' ? (
+            <select className="input-inline select-inline" value={createOrgId} onChange={(event) => setCreateOrgId(Number(event.target.value) || 0)}>
+              {memberships.map((membership) => (
+                <option key={membership.org_id} value={membership.org_id}>
+                  {membership.org_name}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <input className="input-inline" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Issue title" />
           <textarea className="input-inline textarea-inline" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Issue description" />
           <div className="action-row">
@@ -146,7 +162,7 @@ export function ReportsPage() {
                 key={issue.id}
                 icon="reports"
                 title={issue.title}
-                detail={`${issue.author_username} • ${issue.assign_status}`}
+                detail={`${issue.org_name} • ${issue.author_username} • ${issue.assign_status}`}
                 meta={issue.status}
                 action={
                   <Link className="inline-link" to={`/app/reports/${issue.id}`}>
@@ -221,7 +237,7 @@ function ActionPicker({
 export function ReportDetailPage() {
   const { issueId } = useParams()
   const navigate = useNavigate()
-  const { activeMembership, activeOrgId, session } = useAuth()
+  const { activeOrgId, activeScope, getMembershipForOrg, session } = useAuth()
   const [data, setData] = useState<IssueDetailResponse | null>(null)
   const [members, setMembers] = useState<OrganizationMember[]>([])
   const [message, setMessage] = useState('')
@@ -232,19 +248,19 @@ export function ReportDetailPage() {
   const numericIssueId = Number(issueId)
 
   const load = useCallback(async () => {
-    if (!session?.accessToken || !activeOrgId || !numericIssueId) {
+    if (!session?.accessToken || (activeScope === 'org' && !activeOrgId) || !numericIssueId) {
       setData(null)
       setMembers([])
       return
     }
 
     try {
-      const issueResult = await fetchIssue(session.accessToken, activeOrgId, numericIssueId)
+      const issueResult = await fetchIssue(session.accessToken, activeScope === 'org' ? activeOrgId : null, numericIssueId)
       setData(issueResult)
       setError('')
 
       try {
-        const membersResult = await fetchOrganizationMembers(session.accessToken, activeOrgId)
+        const membersResult = await fetchOrganizationMembers(session.accessToken, issueResult.issue.org_id)
         setMembers(membersResult.members)
       } catch {
         // Some roles can view an issue without being allowed to list org members.
@@ -253,14 +269,17 @@ export function ReportDetailPage() {
     } catch (loadError) {
       setError(getErrorMessage(loadError, 'Unable to load issue detail.'))
     }
-  }, [activeOrgId, numericIssueId, session?.accessToken])
+  }, [activeOrgId, activeScope, numericIssueId, session?.accessToken])
 
   useEffect(() => {
     void load()
   }, [load])
 
   const memberOptions = (role: OrgRole) => members.filter((member) => member.org_role === role)
-  const actionVisibility = data?.issue ? (canPerformIssueAction(session, data.issue) as Record<IssueWorkflowActionKey, boolean>) : null
+  const issueMembership = data ? getMembershipForOrg(data.issue.org_id) : null
+  const actionVisibility = data?.issue
+    ? (canPerformIssueAction(session, data.issue, issueMembership) as Record<IssueWorkflowActionKey, boolean>)
+    : null
 
   const runAction = async (action: string, payload: Record<string, unknown>) => {
     if (!session?.accessToken || !data) {
@@ -282,7 +301,7 @@ export function ReportDetailPage() {
   }
 
   const handleDelete = async () => {
-    if (!session?.accessToken || !data || !activeOrgId) {
+    if (!session?.accessToken || !data) {
       return
     }
 
@@ -290,7 +309,7 @@ export function ReportDetailPage() {
     setError('')
     setMessage('')
     try {
-      await deleteIssue(session.accessToken, data.issue.id, activeOrgId)
+      await deleteIssue(session.accessToken, data.issue.id, data.issue.org_id)
       navigate('/app/reports', { replace: true })
     } catch (actionError) {
       setError(getErrorMessage(actionError, 'Unable to delete issue.'))
@@ -317,8 +336,9 @@ export function ReportDetailPage() {
           <SectionCard title={data.issue.title} subtitle={data.issue.assign_status}>
             <div className="detail-pairs">
               <DetailPair label="Status" value={data.issue.status} />
+              <DetailPair label="Organization" value={data.issue.org_name} />
               <DetailPair label="Author" value={data.issue.author_username} />
-              <DetailPair label="Active Role" value={activeMembership?.role ?? 'No org'} />
+              <DetailPair label="Active Role" value={issueMembership?.role ?? 'No org'} />
               <DetailPair label="Created" value={formatDateTime(data.issue.created_at)} />
             </div>
             <p className="body-copy">{data.issue.description || 'No issue description provided.'}</p>
@@ -373,7 +393,7 @@ export function ReportDetailPage() {
                   options={memberOptions('Senior Developer')}
                   selected={selections['assign-dev'] ?? 0}
                   onSelect={(value) => setSelections((current) => ({ ...current, 'assign-dev': value }))}
-                  onRun={() => void runAction('assign-dev', { org_id: activeOrgId, dev_id: selections['assign-dev'] })}
+                  onRun={() => void runAction('assign-dev', { org_id: data.issue.org_id, dev_id: selections['assign-dev'] })}
                   pending={pending}
                 />
               ) : null}
@@ -383,18 +403,18 @@ export function ReportDetailPage() {
                   options={memberOptions('Junior Developer')}
                   selected={selections['assign-junior'] ?? 0}
                   onSelect={(value) => setSelections((current) => ({ ...current, 'assign-junior': value }))}
-                  onRun={() => void runAction('assign-junior', { org_id: activeOrgId, junior_id: selections['assign-junior'] })}
+                  onRun={() => void runAction('assign-junior', { org_id: data.issue.org_id, junior_id: selections['assign-junior'] })}
                   pending={pending}
                 />
               ) : null}
-              {actionVisibility?.['junior-done'] ? <ActionButton label="Mark Junior Done" onRun={() => void runAction('junior-done', { org_id: activeOrgId })} pending={pending} /> : null}
+              {actionVisibility?.['junior-done'] ? <ActionButton label="Mark Junior Done" onRun={() => void runAction('junior-done', { org_id: data.issue.org_id })} pending={pending} /> : null}
               {actionVisibility?.['assign-qa'] ? (
                 <ActionPicker
                   label="Assign QA Tester"
                   options={memberOptions('QA Tester')}
                   selected={selections['assign-qa'] ?? 0}
                   onSelect={(value) => setSelections((current) => ({ ...current, 'assign-qa': value }))}
-                  onRun={() => void runAction('assign-qa', { org_id: activeOrgId, qa_id: selections['assign-qa'] })}
+                  onRun={() => void runAction('assign-qa', { org_id: data.issue.org_id, qa_id: selections['assign-qa'] })}
                   pending={pending}
                 />
               ) : null}
@@ -404,7 +424,7 @@ export function ReportDetailPage() {
                   options={memberOptions('Senior QA')}
                   selected={selections['report-senior-qa'] ?? 0}
                   onSelect={(value) => setSelections((current) => ({ ...current, 'report-senior-qa': value }))}
-                  onRun={() => void runAction('report-senior-qa', { org_id: activeOrgId, senior_qa_id: selections['report-senior-qa'] })}
+                  onRun={() => void runAction('report-senior-qa', { org_id: data.issue.org_id, senior_qa_id: selections['report-senior-qa'] })}
                   pending={pending}
                 />
               ) : null}
@@ -414,13 +434,13 @@ export function ReportDetailPage() {
                   options={memberOptions('QA Lead')}
                   selected={selections['report-qa-lead'] ?? 0}
                   onSelect={(value) => setSelections((current) => ({ ...current, 'report-qa-lead': value }))}
-                  onRun={() => void runAction('report-qa-lead', { org_id: activeOrgId, qa_lead_id: selections['report-qa-lead'] })}
+                  onRun={() => void runAction('report-qa-lead', { org_id: data.issue.org_id, qa_lead_id: selections['report-qa-lead'] })}
                   pending={pending}
                 />
               ) : null}
-              {actionVisibility?.['qa-lead-approve'] ? <ActionButton label="Approve Issue" onRun={() => void runAction('qa-lead-approve', { org_id: activeOrgId })} pending={pending} /> : null}
-              {actionVisibility?.['qa-lead-reject'] ? <ActionButton label="Reject Issue" onRun={() => void runAction('qa-lead-reject', { org_id: activeOrgId })} pending={pending} tone="danger" /> : null}
-              {actionVisibility?.['pm-close'] ? <ActionButton label="Close Issue" onRun={() => void runAction('pm-close', { org_id: activeOrgId })} pending={pending} /> : null}
+              {actionVisibility?.['qa-lead-approve'] ? <ActionButton label="Approve Issue" onRun={() => void runAction('qa-lead-approve', { org_id: data.issue.org_id })} pending={pending} /> : null}
+              {actionVisibility?.['qa-lead-reject'] ? <ActionButton label="Reject Issue" onRun={() => void runAction('qa-lead-reject', { org_id: data.issue.org_id })} pending={pending} tone="danger" /> : null}
+              {actionVisibility?.['pm-close'] ? <ActionButton label="Close Issue" onRun={() => void runAction('pm-close', { org_id: data.issue.org_id })} pending={pending} /> : null}
               {actionVisibility?.delete ? <ActionButton label="Delete Issue" onRun={() => void handleDelete()} pending={pending} tone="danger" /> : null}
               {!Object.values(actionVisibility ?? {}).some(Boolean) ? <p className="body-copy">No workflow action is available for your role and the current issue state.</p> : null}
             </div>

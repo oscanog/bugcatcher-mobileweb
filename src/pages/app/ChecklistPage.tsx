@@ -12,18 +12,18 @@ function isImageAttachment(attachment: ChecklistAttachment) {
 }
 
 export function ChecklistPage() {
-  const { activeOrgId, session } = useAuth()
+  const { activeOrgId, activeScope, session } = useAuth()
   const [data, setData] = useState<ChecklistBatchesResponse | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
     const run = async () => {
-      if (!session?.accessToken || !activeOrgId) {
+      if (!session?.accessToken || (activeScope === 'org' && !activeOrgId) || activeScope === 'none') {
         setData(null)
         return
       }
       try {
-        const result = await fetchChecklistBatches(session.accessToken, activeOrgId)
+        const result = await fetchChecklistBatches(session.accessToken, activeScope === 'org' ? activeOrgId : null)
         setData(result)
         setError('')
       } catch (loadError) {
@@ -31,7 +31,7 @@ export function ChecklistPage() {
       }
     }
     void run()
-  }, [activeOrgId, session?.accessToken])
+  }, [activeOrgId, activeScope, session?.accessToken])
 
   if (!data && !error) {
     return <LoadingSection title="Checklist" subtitle="Batch tracking" />
@@ -53,7 +53,7 @@ export function ChecklistPage() {
                 key={batch.id}
                 icon="checklist"
                 title={batch.title}
-                detail={`${batch.project_name} • ${batch.module_name}${batch.submodule_name ? ` / ${batch.submodule_name}` : ''}`}
+                detail={`${batch.org_name || batch.project_name} • ${batch.project_name} • ${batch.module_name}${batch.submodule_name ? ` / ${batch.submodule_name}` : ''}`}
                 meta={`${batch.status} • ${batch.total_items ?? 0} items`}
                 action={
                   <Link className="inline-link" to={`/app/checklist/batches/${batch.id}`}>
@@ -71,7 +71,7 @@ export function ChecklistPage() {
 
 export function ChecklistBatchDetailPage() {
   const { batchId } = useParams()
-  const { activeOrgId, session } = useAuth()
+  const { activeOrgId, activeScope, session } = useAuth()
   const [data, setData] = useState<ChecklistBatchDetailResponse | null>(null)
   const [error, setError] = useState('')
 
@@ -79,12 +79,12 @@ export function ChecklistBatchDetailPage() {
 
   useEffect(() => {
     const run = async () => {
-      if (!session?.accessToken || !activeOrgId || !numericBatchId) {
+      if (!session?.accessToken || (activeScope === 'org' && !activeOrgId) || !numericBatchId) {
         setData(null)
         return
       }
       try {
-        const result = await fetchChecklistBatch(session.accessToken, activeOrgId, numericBatchId)
+        const result = await fetchChecklistBatch(session.accessToken, activeScope === 'org' ? activeOrgId : null, numericBatchId)
         setData(result)
         setError('')
       } catch (loadError) {
@@ -92,7 +92,7 @@ export function ChecklistBatchDetailPage() {
       }
     }
     void run()
-  }, [activeOrgId, numericBatchId, session?.accessToken])
+  }, [activeOrgId, activeScope, numericBatchId, session?.accessToken])
 
   if (!numericBatchId) {
     return <EmptySection title="Checklist Detail" message="Batch id is invalid." />
@@ -110,6 +110,7 @@ export function ChecklistBatchDetailPage() {
           <SectionCard title={data.batch.title} subtitle={data.batch.project_name}>
             <div className="detail-pairs">
               <DetailPair label="Module" value={data.batch.module_name} />
+              <DetailPair label="Organization" value={data.batch.org_name || 'Organization'} />
               <DetailPair label="Submodule" value={data.batch.submodule_name || 'None'} />
               <DetailPair label="Status" value={data.batch.status} />
               <DetailPair label="QA Lead" value={data.batch.qa_lead_name || 'Unassigned'} />
@@ -164,7 +165,7 @@ export function ChecklistBatchDetailPage() {
                   key={item.id}
                   icon="checklist"
                   title={item.title}
-                  detail={`${item.required_role} • ${item.status}`}
+                  detail={`${item.org_name || data.batch.org_name || 'Organization'} • ${item.required_role} • ${item.status}`}
                   meta={item.assigned_to_name || 'Unassigned'}
                   action={
                     <div className="list-row__actions">

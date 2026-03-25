@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth-context'
 import { getErrorMessage } from '../../lib/api'
 import { AuthField, DetailPair, Icon, ListRow, SectionCard, StatCard, StatusTile } from '../../components/ui'
@@ -69,19 +69,19 @@ function formatProfileLabel(value: string): string {
 }
 
 export function DashboardPage() {
-  const { activeMembership, activeOrgId, session } = useAuth()
+  const { activeOrgId, activeScope, selectionLabel, session } = useAuth()
   const [data, setData] = useState<DashboardSummaryResponse | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
     const run = async () => {
-      if (!session?.accessToken || !activeOrgId) {
+      if (!session?.accessToken || (activeScope === 'org' && !activeOrgId) || activeScope === 'none') {
         setData(null)
         return
       }
 
       try {
-        const result = await fetchDashboardSummary(session.accessToken, activeOrgId)
+        const result = await fetchDashboardSummary(session.accessToken, activeScope === 'org' ? activeOrgId : null)
         setData(result)
         setError('')
       } catch (loadError) {
@@ -90,14 +90,14 @@ export function DashboardPage() {
     }
 
     void run()
-  }, [activeOrgId, session?.accessToken])
+  }, [activeOrgId, activeScope, session?.accessToken])
 
-  if (!activeMembership) {
+  if (activeScope === 'none') {
     return <EmptySection title="Dashboard" message="Set an active organization first." />
   }
 
   if (!data && !error) {
-    return <LoadingSection title="Dashboard" subtitle={activeMembership.org_name} />
+    return <LoadingSection title="Dashboard" subtitle={selectionLabel} />
   }
 
   const trendMax = Math.max(1, ...(data?.trend ?? []).flatMap((entry) => [entry.issues, entry.projects, entry.checklist]))
@@ -168,7 +168,7 @@ export function DashboardPage() {
                   key={issue.id}
                   icon="reports"
                   title={issue.title}
-                  detail={`${issue.author_username} • ${issue.assign_status}`}
+                  detail={`${issue.org_name} • ${issue.author_username} • ${issue.assign_status}`}
                   action={
                     <Link className="inline-link" to={`/app/reports/${issue.id}`}>
                       Open
@@ -185,7 +185,20 @@ export function DashboardPage() {
 }
 
 export function OrganizationsPage() {
-  const { activeMembership, activeOrgId, memberships, refreshSession, session, setActiveOrg, user } = useAuth()
+  const location = useLocation()
+  const {
+    activeMembership,
+    activeOrgId,
+    activeScope,
+    canUseAllScope,
+    memberships,
+    refreshSession,
+    selectAllOrganizations,
+    selectionLabel,
+    session,
+    setActiveOrg,
+    user,
+  } = useAuth()
   const [remote, setRemote] = useState<OrganizationsResponse | null>(null)
   const [createName, setCreateName] = useState('')
   const [pendingOrgId, setPendingOrgId] = useState<number | null>(null)
@@ -210,7 +223,13 @@ export function OrganizationsPage() {
 
   useEffect(() => {
     void load()
-  }, [activeOrgId, load])
+  }, [activeOrgId, activeScope, load])
+
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get('scope') === 'all-blocked') {
+      setMessage('Select one organization first before opening that area.')
+    }
+  }, [location.search])
 
   const switchOrg = async (orgId: number) => {
     setPendingOrgId(orgId)
@@ -226,6 +245,23 @@ export function OrganizationsPage() {
     }
 
     setMessage('Active organization updated.')
+    await refreshSession()
+  }
+
+  const switchAll = async () => {
+    setPendingOrgId(-1)
+    setError('')
+    setMessage('')
+
+    const result = await selectAllOrganizations()
+
+    setPendingOrgId(null)
+    if (!result.ok) {
+      setError(result.error ?? 'Unable to switch organization scope.')
+      return
+    }
+
+    setMessage('Now viewing all joined organizations.')
     await refreshSession()
   }
 
@@ -302,7 +338,13 @@ export function OrganizationsPage() {
       {error ? <FormMessage tone="error">{error}</FormMessage> : null}
 
       <SectionCard title="Active Organization" subtitle="Current session context">
-        {activeMembership ? (
+        {activeScope === 'all' ? (
+          <div className="detail-pairs">
+            <DetailPair label="Selection" value="All organizations" />
+            <DetailPair label="System Role" value={user?.role ?? 'user'} />
+            <DetailPair label="Current Label" value={selectionLabel} />
+          </div>
+        ) : activeMembership ? (
           <div className="detail-pairs">
             <DetailPair label="Name" value={activeMembership.org_name} />
             <DetailPair label="Org Role" value={activeMembership.role} />
@@ -315,6 +357,25 @@ export function OrganizationsPage() {
           </p>
         )}
       </SectionCard>
+
+      {canUseAllScope && memberships.length > 0 ? (
+        <SectionCard title="Admin All Scope" subtitle="Browse joined organizations together">
+          <div className="action-row">
+            <div>
+              <strong>{selectionLabel}</strong>
+              <p className="body-copy">Use all-scope for dashboard, projects, issues, and checklist pages.</p>
+            </div>
+            <button
+              type="button"
+              className="button button--ghost"
+              disabled={pendingOrgId === -1 || activeScope === 'all'}
+              onClick={() => void switchAll()}
+            >
+              {pendingOrgId === -1 ? 'Switching...' : activeScope === 'all' ? 'Active' : 'Use All'}
+            </button>
+          </div>
+        </SectionCard>
+      ) : null}
 
       <SectionCard title="Create Organization" subtitle="Owner role is assigned automatically">
         <form className="inline-form" onSubmit={handleCreate}>
@@ -343,10 +404,10 @@ export function OrganizationsPage() {
                 icon="organization"
                 title={membership.org_name}
                 detail={`${membership.role}${membership.is_owner ? ' • Owner' : ''}`}
-                meta={membership.org_id === activeOrgId ? 'Active' : `Org #${membership.org_id}`}
+                meta={activeScope === 'org' && membership.org_id === activeOrgId ? 'Active' : `Org #${membership.org_id}`}
                 action={
                   <div className="list-row__actions">
-                    {membership.org_id === activeOrgId ? (
+                    {activeScope === 'org' && membership.org_id === activeOrgId ? (
                       <span className="pill pill--success">Active</span>
                     ) : (
                       <button

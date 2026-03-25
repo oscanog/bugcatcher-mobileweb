@@ -112,7 +112,10 @@ export function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
-export function withOrgQuery(path: string, orgId: number): string {
+export function withOrgQuery(path: string, orgId?: number | null): string {
+  if (!orgId || orgId <= 0) {
+    return path
+  }
   const separator = path.includes('?') ? '&' : '?'
   return `${path}${separator}org_id=${orgId}`
 }

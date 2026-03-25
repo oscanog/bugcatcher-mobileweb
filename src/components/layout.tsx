@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth-context'
 import { fetchAIChatBootstrap } from '../features/ai-chat/api'
@@ -25,10 +25,46 @@ export function AppShell() {
   const activeRoute = findAppRoute(location.pathname)
   const isAiChatRoute = location.pathname.startsWith('/app/ai-chat')
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [isOrgSwitcherOpen, setIsOrgSwitcherOpen] = useState(false)
+  const [orgFilter, setOrgFilter] = useState('')
+  const [isSwitchingOrg, setIsSwitchingOrg] = useState(false)
   const [showAiChatFab, setShowAiChatFab] = useState(false)
+  const orgSwitcherRef = useRef<HTMLDivElement | null>(null)
   const { unreadCount } = useNotifications()
-  const { activeMembership, defaultAppPath, logout, session, user } = useAuth()
+  const {
+    activeMembership,
+    canUseAllScope,
+    defaultAppPath,
+    logout,
+    memberships,
+    selectAllOrganizations,
+    selection,
+    selectionLabel,
+    session,
+    setActiveOrg,
+    user,
+  } = useAuth()
   const drawerItems = getSidebarItems(session)
+  const shouldShowOrgFilter = memberships.length >= 6
+  const filteredMemberships = useMemo(() => {
+    const needle = orgFilter.trim().toLowerCase()
+    if (!needle) {
+      return memberships
+    }
+    return memberships.filter((membership) =>
+      `${membership.org_name} ${membership.role}`.toLowerCase().includes(needle),
+    )
+  }, [memberships, orgFilter])
+
+  const describeMembershipRole = (role: string) => (role === 'owner' ? 'Owner' : role)
+
+  const describeMembershipMeta = (membership: { role: string; is_owner: boolean }) => {
+    const baseRole = describeMembershipRole(membership.role)
+    if (membership.is_owner && membership.role !== 'owner') {
+      return `${baseRole} / Owner`
+    }
+    return baseRole
+  }
 
   useEffect(() => {
     const run = async () => {
@@ -47,6 +83,58 @@ export function AppShell() {
 
     void run()
   }, [session])
+
+  useEffect(() => {
+    if (!isDrawerOpen) {
+      setIsOrgSwitcherOpen(false)
+      setOrgFilter('')
+      setIsSwitchingOrg(false)
+    }
+  }, [isDrawerOpen])
+
+  useEffect(() => {
+    if (!isOrgSwitcherOpen) {
+      return
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!orgSwitcherRef.current?.contains(event.target as Node)) {
+        setIsOrgSwitcherOpen(false)
+      }
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOrgSwitcherOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [isOrgSwitcherOpen])
+
+  const handleSelectOrg = async (orgId: number) => {
+    setIsSwitchingOrg(true)
+    const result = await setActiveOrg(orgId)
+    setIsSwitchingOrg(false)
+    if (result.ok) {
+      setIsDrawerOpen(false)
+    }
+  }
+
+  const handleSelectAll = async () => {
+    setIsSwitchingOrg(true)
+    const result = await selectAllOrganizations()
+    setIsSwitchingOrg(false)
+    if (result.ok) {
+      setIsDrawerOpen(false)
+    }
+  }
 
   return (
     <div className="app-shell">
@@ -67,9 +155,89 @@ export function AppShell() {
             <p>{user.email}</p>
             <span>
               {user.role}
-              {activeMembership ? ` / ${activeMembership.role}` : ''}
+              {selection.scope === 'org' && activeMembership ? ` / ${describeMembershipRole(activeMembership.role)}` : ''}
             </span>
-            {activeMembership ? <small>{activeMembership.org_name}</small> : <small>No active organization</small>}
+            <small>{selectionLabel}</small>
+            {(memberships.length > 0 || canUseAllScope) ? (
+              <div className="drawer-org-switcher" ref={orgSwitcherRef}>
+                <button
+                  type="button"
+                  className={`drawer-org-switcher__trigger ${isOrgSwitcherOpen ? 'is-open' : ''}`}
+                  onClick={() => setIsOrgSwitcherOpen((current) => !current)}
+                  disabled={isSwitchingOrg}
+                  aria-expanded={isOrgSwitcherOpen}
+                  aria-haspopup="menu"
+                >
+                  <span className="drawer-org-switcher__trigger-icon" aria-hidden="true">
+                    <Icon name="organization" />
+                  </span>
+                  <span className="drawer-org-switcher__trigger-copy">
+                    <span>{selection.scope === 'all' ? 'Viewing all organizations' : 'Switch organization'}</span>
+                    <strong>{selectionLabel}</strong>
+                  </span>
+                  <span className="drawer-org-switcher__trigger-chevron" aria-hidden="true">
+                    <Icon name="arrow" />
+                  </span>
+                </button>
+                {isOrgSwitcherOpen ? (
+                  <div className="drawer-org-switcher__panel" role="menu">
+                    <div className="drawer-org-switcher__panel-head">
+                      <span>Organization view</span>
+                      <strong>{selection.scope === 'all' ? 'Aggregate scope' : 'Choose a workspace'}</strong>
+                    </div>
+                    {shouldShowOrgFilter ? (
+                      <input
+                        className="input-inline drawer-org-switcher__filter"
+                        value={orgFilter}
+                        onChange={(event) => setOrgFilter(event.target.value)}
+                        placeholder="Filter organizations"
+                      />
+                    ) : null}
+                    {canUseAllScope ? (
+                      <button
+                        type="button"
+                        className={`drawer-org-switcher__option ${selection.scope === 'all' ? 'is-active' : ''}`}
+                        onClick={() => void handleSelectAll()}
+                        disabled={isSwitchingOrg}
+                        role="menuitemradio"
+                        aria-checked={selection.scope === 'all'}
+                      >
+                        <span className="drawer-org-switcher__option-header">
+                          <span className="drawer-org-switcher__option-title">All organizations</span>
+                          {selection.scope === 'all' ? <span className="drawer-org-switcher__badge">Active</span> : null}
+                        </span>
+                        <small>Admin aggregate view</small>
+                      </button>
+                    ) : null}
+                    <div className="drawer-org-switcher__list">
+                      {filteredMemberships.length > 0 ? (
+                        filteredMemberships.map((membership) => (
+                          <button
+                            key={membership.org_id}
+                            type="button"
+                            className={`drawer-org-switcher__option ${selection.scope === 'org' && selection.orgId === membership.org_id ? 'is-active' : ''}`}
+                            onClick={() => void handleSelectOrg(membership.org_id)}
+                            disabled={isSwitchingOrg}
+                            role="menuitemradio"
+                            aria-checked={selection.scope === 'org' && selection.orgId === membership.org_id}
+                          >
+                            <span className="drawer-org-switcher__option-header">
+                              <span className="drawer-org-switcher__option-title">{membership.org_name}</span>
+                              {selection.scope === 'org' && selection.orgId === membership.org_id ? (
+                                <span className="drawer-org-switcher__badge">Active</span>
+                              ) : null}
+                            </span>
+                            <small>{describeMembershipMeta(membership)}</small>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="drawer-org-switcher__empty">No organizations match that filter.</p>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
         <div className="drawer-section">
@@ -118,7 +286,7 @@ export function AppShell() {
           </button>
 
           <div className="top-bar__titles">
-            <p className="top-bar__eyebrow">{activeMembership ? activeMembership.org_name : 'No active organization'}</p>
+            <p className="top-bar__eyebrow">{selectionLabel}</p>
             <h1>{activeRoute.title}</h1>
             <p>{activeRoute.subtitle}</p>
           </div>

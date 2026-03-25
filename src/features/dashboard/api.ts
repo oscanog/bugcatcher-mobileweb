@@ -17,6 +17,8 @@ export interface DashboardTrendPoint {
 
 export interface DashboardRecentIssue {
   id: number
+  org_id: number
+  org_name: string
   title: string
   status: string
   assign_status: string
@@ -45,13 +47,14 @@ export interface DashboardQaLeadChecklistSummary {
 }
 
 export interface DashboardOrgContext {
-  org_id: number
+  org_id: number | null
   org_name: string
   org_role: string
   org_owner_id: number
   is_org_owner: boolean
   user_id: number
   system_role: string
+  active_scope?: string
 }
 
 export interface DashboardSummaryResponse {
@@ -63,6 +66,6 @@ export interface DashboardSummaryResponse {
   qa_lead_checklist: DashboardQaLeadChecklistSummary | null
 }
 
-export function fetchDashboardSummary(accessToken: string, orgId: number) {
+export function fetchDashboardSummary(accessToken: string, orgId?: number | null) {
   return requestJson<DashboardSummaryResponse>(withOrgQuery('/dashboard/summary', orgId), { method: 'GET' }, accessToken)
 }

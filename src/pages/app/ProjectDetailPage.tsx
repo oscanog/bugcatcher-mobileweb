@@ -9,7 +9,7 @@ import { FormMessage, LoadingSection, formatDateTime } from '../shared'
 
 export function ProjectDetailPage() {
   const { projectId } = useParams()
-  const { activeOrgId, session } = useAuth()
+  const { activeOrgId, activeScope, getMembershipForOrg, session } = useAuth()
   const [data, setData] = useState<ProjectDetailResponse | null>(null)
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
@@ -21,13 +21,13 @@ export function ProjectDetailPage() {
   const numericProjectId = Number(projectId)
 
   const load = useCallback(async () => {
-    if (!session?.accessToken || !activeOrgId || !numericProjectId) {
+    if (!session?.accessToken || (activeScope === 'org' && !activeOrgId) || !numericProjectId) {
       setData(null)
       return
     }
 
     try {
-      const result = await fetchProject(session.accessToken, activeOrgId, numericProjectId)
+      const result = await fetchProject(session.accessToken, activeScope === 'org' ? activeOrgId : null, numericProjectId)
       setData(result)
       setName(result.project.name)
       setCode(result.project.code || '')
@@ -36,7 +36,7 @@ export function ProjectDetailPage() {
     } catch (loadError) {
       setError(getErrorMessage(loadError, 'Unable to load project detail.'))
     }
-  }, [activeOrgId, numericProjectId, session?.accessToken])
+  }, [activeOrgId, activeScope, numericProjectId, session?.accessToken])
 
   useEffect(() => {
     void load()
@@ -44,7 +44,7 @@ export function ProjectDetailPage() {
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!session?.accessToken || !activeOrgId || !numericProjectId || !name.trim()) {
+    if (!session?.accessToken || !data || !numericProjectId || !name.trim()) {
       return
     }
 
@@ -53,7 +53,7 @@ export function ProjectDetailPage() {
     setMessage('')
     try {
       await updateProject(session.accessToken, numericProjectId, {
-        org_id: activeOrgId,
+        org_id: data.project.org_id,
         name: name.trim(),
         code: code.trim(),
         description: description.trim(),
@@ -69,7 +69,7 @@ export function ProjectDetailPage() {
   }
 
   const handleStatus = async (nextStatus: 'active' | 'archived') => {
-    if (!session?.accessToken || !activeOrgId || !numericProjectId) {
+    if (!session?.accessToken || !data || !numericProjectId) {
       return
     }
 
@@ -77,7 +77,7 @@ export function ProjectDetailPage() {
     setError('')
     setMessage('')
     try {
-      await setProjectStatus(session.accessToken, numericProjectId, activeOrgId, nextStatus)
+      await setProjectStatus(session.accessToken, numericProjectId, data.project.org_id, nextStatus)
       setMessage(nextStatus === 'archived' ? 'Project archived.' : 'Project activated.')
       await load()
     } catch (actionError) {
@@ -91,6 +91,9 @@ export function ProjectDetailPage() {
     return <LoadingSection title="Project Detail" subtitle={`Project #${numericProjectId || '-'}`} />
   }
 
+  const projectMembership = data ? getMembershipForOrg(data.project.org_id) : null
+  const canEditProject = canManageProjects(session, projectMembership)
+
   return (
     <div className="page-stack">
       {message ? <FormMessage tone="success">{message}</FormMessage> : null}
@@ -101,13 +104,14 @@ export function ProjectDetailPage() {
           <SectionCard title={data.project.name} subtitle={data.project.code || 'No project code'}>
             <div className="detail-pairs">
               <DetailPair label="Status" value={data.project.status} />
+              <DetailPair label="Organization" value={data.project.org_name} />
               <DetailPair label="Created" value={formatDateTime(data.project.created_at)} />
               <DetailPair label="Updated" value={formatDateTime(data.project.updated_at || data.project.created_at)} />
               <DetailPair label="Batches" value={`${data.batches.length}`} />
             </div>
           </SectionCard>
 
-          {canManageProjects(session) ? (
+          {canEditProject ? (
             <SectionCard title="Update Project">
               <form className="auth-stack" onSubmit={handleSave}>
                 <input className="input-inline" value={name} onChange={(event) => setName(event.target.value)} placeholder="Project name" />

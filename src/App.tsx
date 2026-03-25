@@ -4,7 +4,7 @@ import './App.css'
 import { AuthProvider, getDefaultAppPath, useAuth } from './auth-context'
 import { AppShell, AppViewport } from './components/layout'
 import { NotificationProvider } from './features/notifications/context'
-import { canViewRoute, findAppRoute } from './lib/access'
+import { canViewRoute, findAppRoute, requiresConcreteOrgSelection } from './lib/access'
 import { ThemeProvider } from './theme-context'
 import {
   AIAdminPage,
@@ -154,7 +154,15 @@ function GuardedAppRoute({ path, children }: { path: string; children: ReactElem
   const route = findAppRoute(path)
   const { session } = useAuth()
 
-  if (route.requiresOrg && !session?.memberships.find((membership) => membership.org_id === session.activeOrgId)) {
+  if (session?.activeScope === 'all' && requiresConcreteOrgSelection(route.key)) {
+    return <Navigate to="/app/organizations?scope=all-blocked" replace />
+  }
+
+  if (
+    route.requiresOrg &&
+    session?.activeScope !== 'all' &&
+    !session?.memberships.find((membership) => membership.org_id === session.activeOrgId)
+  ) {
     return <Navigate to="/app/organizations" replace />
   }
 

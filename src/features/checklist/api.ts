@@ -3,6 +3,7 @@ import { requestJson, withOrgQuery } from '../../lib/api'
 export interface ChecklistBatch {
   id: number
   org_id: number
+  org_name?: string
   project_id: number
   title: string
   module_name: string
@@ -34,6 +35,7 @@ export interface ChecklistItem {
   id: number
   batch_id: number
   org_id: number
+  org_name?: string
   project_id: number
   sequence_no: number
   title: string
@@ -107,11 +109,13 @@ export interface ChecklistItemUpdatePayload {
 
 export function fetchChecklistBatches(
   accessToken: string,
-  orgId: number,
+  orgId?: number | null,
   filters?: { projectId?: number; status?: string; search?: string },
 ) {
   const query = new URLSearchParams()
-  query.set('org_id', `${orgId}`)
+  if (orgId && orgId > 0) {
+    query.set('org_id', `${orgId}`)
+  }
   if ((filters?.projectId ?? 0) > 0) {
     query.set('project_id', `${filters?.projectId}`)
   }
@@ -122,14 +126,15 @@ export function fetchChecklistBatches(
     query.set('q', filters.search)
   }
 
-  return requestJson<ChecklistBatchesResponse>(`/checklist/batches?${query.toString()}`, { method: 'GET' }, accessToken)
+  const path = query.size > 0 ? `/checklist/batches?${query.toString()}` : '/checklist/batches'
+  return requestJson<ChecklistBatchesResponse>(path, { method: 'GET' }, accessToken)
 }
 
-export function fetchChecklistBatch(accessToken: string, orgId: number, batchId: number) {
+export function fetchChecklistBatch(accessToken: string, orgId: number | null | undefined, batchId: number) {
   return requestJson<ChecklistBatchDetailResponse>(withOrgQuery(`/checklist/batches/${batchId}`, orgId), { method: 'GET' }, accessToken)
 }
 
-export function fetchChecklistItem(accessToken: string, orgId: number, itemId: number) {
+export function fetchChecklistItem(accessToken: string, orgId: number | null | undefined, itemId: number) {
   return requestJson<ChecklistItemDetailResponse>(withOrgQuery(`/checklist/items/${itemId}`, orgId), { method: 'GET' }, accessToken)
 }
 
