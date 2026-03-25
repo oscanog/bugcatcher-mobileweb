@@ -27,6 +27,14 @@ export interface OrganizationMember {
   joined_at: string
 }
 
+export interface CreateOrganizationMemberPayload {
+  username: string
+  email: string
+  password: string
+  confirm_password: string
+  org_role: OrgRole
+}
+
 export interface OrganizationsResponse {
   active_org_id: number
   organizations: OrganizationSummary[]
@@ -51,12 +59,31 @@ export interface OrganizationMutationResponse {
   org_id: number
 }
 
+export interface OrganizationMemberCreateResponse {
+  created: boolean
+  org_id: number
+  user_id: number
+  member: OrganizationMember
+  message: string
+}
+
 export function fetchOrganizations(accessToken: string) {
   return requestJson<OrganizationsResponse>('/orgs', { method: 'GET' }, accessToken)
 }
 
 export function fetchOrganizationMembers(accessToken: string, orgId: number) {
   return requestJson<OrganizationMembersResponse>(`/orgs/${orgId}/members`, { method: 'GET' }, accessToken)
+}
+
+export function createOrganizationMember(accessToken: string, orgId: number, payload: CreateOrganizationMemberPayload) {
+  return requestJson<OrganizationMemberCreateResponse>(
+    `/orgs/${orgId}/members`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+    accessToken,
+  )
 }
 
 export function createOrganization(accessToken: string, name: string) {

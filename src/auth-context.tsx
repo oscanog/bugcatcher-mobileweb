@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { API_BASE_PATH, ApiError, getErrorMessage, requestJson } from './lib/api'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { API_BASE_PATH, ApiError, getErrorMessage, registerAccessTokenRefreshHandler, requestJson } from './lib/api'
 import { getActiveMembership, getDefaultAppPath, hasOrgRole, hasSystemRole } from './lib/access'
 
 export type SystemRole = 'super_admin' | 'admin' | 'user'
@@ -196,14 +196,15 @@ function buildSession(me: MeResponse, tokens: StoredTokens): AuthSession {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthContextValue['status']>('bootstrapping')
   const [session, setSession] = useState<AuthSession | null>(null)
+  const refreshPromiseRef = useRef<Promise<AuthSession | null> | null>(null)
 
-  const applySession = (nextSession: AuthSession | null) => {
+  const applySession = useCallback((nextSession: AuthSession | null) => {
     setSession(nextSession)
     persistStoredTokens(nextSession)
     setStatus(nextSession ? 'authenticated' : 'anonymous')
-  }
+  }, [])
 
-  const hydrateSession = async (storedTokens: StoredTokens): Promise<AuthSession> => {
+  const hydrateSession = useCallback(async (storedTokens: StoredTokens): Promise<AuthSession> => {
     try {
       const me = await requestJson<MeResponse>('/auth/me', { method: 'GET' }, storedTokens.accessToken)
       return buildSession(me, storedTokens)
@@ -220,7 +221,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const nextTokens = buildStoredTokens(refreshed.tokens, refreshed.active_org_id)
     const me = await requestJson<MeResponse>('/auth/me', { method: 'GET' }, nextTokens.accessToken)
     return buildSession(me, nextTokens)
-  }
+  }, [])
+
+  const refreshSessionInternal = useCallback(async (): Promise<AuthSession | null> => {
+    const storedTokens = session ?? readStoredTokens()
+    if (!storedTokens) {
+      applySession(null)
+      return null
+    }
+
+    if (!refreshPromiseRef.current) {
+      refreshPromiseRef.current = (async () => {
+        try {
+          const refreshedSession = await hydrateSession(storedTokens)
+          applySession(refreshedSession)
+          return refreshedSession
+        } catch {
+          applySession(null)
+          return null
+        } finally {
+          refreshPromiseRef.current = null
+        }
+      })()
+    }
+
+    return refreshPromiseRef.current
+  }, [applySession, hydrateSession, session])
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -239,7 +265,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     void bootstrap()
-  }, [])
+  }, [applySession, hydrateSession])
+
+  useEffect(() => {
+    registerAccessTokenRefreshHandler(async () => {
+      const refreshedSession = await refreshSessionInternal()
+      return refreshedSession?.accessToken ?? null
+    })
+
+    return () => {
+      registerAccessTokenRefreshHandler(null)
+    }
+  }, [refreshSessionInternal])
 
   const activeMembership = getActiveMembership(session)
   const value: AuthContextValue = {
@@ -356,20 +393,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     },
     refreshSession: async () => {
-      const storedTokens = session ?? readStoredTokens()
-      if (!storedTokens) {
-        applySession(null)
-        return false
-      }
-
-      try {
-        const refreshedSession = await hydrateSession(storedTokens)
-        applySession(refreshedSession)
-        return true
-      } catch {
-        applySession(null)
-        return false
-      }
+      const refreshedSession = await refreshSessionInternal()
+      return Boolean(refreshedSession)
     },
     setActiveOrg: async (orgId) => {
       if (!session) {

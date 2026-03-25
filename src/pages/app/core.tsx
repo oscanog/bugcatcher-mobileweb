@@ -791,7 +791,7 @@ export function AIAdminPage() {
                   action={
                     <div className="list-row__actions">
                       <span className={`pill ${provider.is_enabled ? 'pill--success' : ''}`}>{provider.is_enabled ? 'Enabled' : 'Disabled'}</span>
-                      {provider.api_key ? <span className="pill">{provider.api_key}</span> : null}
+                      {provider.api_key ? <span className="pill">Key saved</span> : null}
                     </div>
                   }
                 />

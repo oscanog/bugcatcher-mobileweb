@@ -193,6 +193,9 @@ export function canViewRoute(session: AuthSession | null, routeKey: AppRouteKey)
   if (route.requiredSystemRole && !hasSystemRole(session, route.requiredSystemRole)) {
     return false
   }
+  if (route.key === 'manage-users' && hasSystemRole(session, 'super_admin')) {
+    return true
+  }
   if (route.requiredOrgRole && !hasOrgRole(session, route.requiredOrgRole)) {
     return false
   }
