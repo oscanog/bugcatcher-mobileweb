@@ -15,6 +15,7 @@ export interface ChecklistBatch {
   created_by: number
   updated_by: number | null
   assigned_qa_lead_id: number | null
+  source_mode?: 'screenshot' | 'link' | null
   notes: string | null
   page_url: string | null
   created_at: string
@@ -77,6 +78,8 @@ export interface ChecklistBatchDetailResponse {
   batch: ChecklistBatch
   items: ChecklistItem[]
   attachments: ChecklistAttachment[]
+  assignable_qa_leads?: ChecklistAssigneeOption[]
+  assignable_testers?: ChecklistAssigneeOption[]
 }
 
 export interface ChecklistAttachment {
@@ -101,6 +104,17 @@ export interface ChecklistItemDetailResponse {
   item: ChecklistItem
   attachments: ChecklistAttachment[]
   assignable_testers?: ChecklistAssigneeOption[]
+}
+
+export interface ChecklistBatchUpdatePayload {
+  project_id: number
+  title: string
+  module_name: string
+  submodule_name?: string
+  status: string
+  assigned_qa_lead_id?: number
+  notes?: string
+  page_url?: string
 }
 
 export interface ChecklistItemUpdatePayload {
@@ -139,6 +153,17 @@ export function fetchChecklistBatches(
 
 export function fetchChecklistBatch(accessToken: string, orgId: number | null | undefined, batchId: number) {
   return requestJson<ChecklistBatchDetailResponse>(withOrgQuery(`/checklist/batches/${batchId}`, orgId), { method: 'GET' }, accessToken)
+}
+
+export function updateChecklistBatch(accessToken: string, orgId: number, batchId: number, payload: ChecklistBatchUpdatePayload) {
+  return requestJson<{ batch: ChecklistBatch }>(
+    withOrgQuery(`/checklist/batches/${batchId}`, orgId),
+    {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    },
+    accessToken,
+  )
 }
 
 export function fetchChecklistItem(accessToken: string, orgId: number | null | undefined, itemId: number) {

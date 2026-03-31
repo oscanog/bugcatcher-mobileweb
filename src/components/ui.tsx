@@ -294,7 +294,7 @@ export function ListRow({
   icon: IconName
   title: string
   detail?: string
-  meta?: string
+  meta?: ReactNode
   tone?: 'default' | 'success' | 'alert'
   readState?: 'read' | 'unread'
   action?: ReactNode
@@ -310,7 +310,7 @@ export function ListRow({
         {detail ? <p>{detail}</p> : null}
       </div>
       <div className="list-row__aside">
-        {meta ? <small>{meta}</small> : null}
+        {typeof meta === 'string' ? <small>{meta}</small> : meta ? <div className="list-row__meta">{meta}</div> : null}
         {action}
       </div>
     </article>

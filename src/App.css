@@ -1255,6 +1255,12 @@
   min-width: 74px;
 }
 
+.list-row__meta {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .inline-link {
   padding: 0;
   background: transparent;
@@ -3898,6 +3904,334 @@
   max-width: 100%;
 }
 
+.checklist-batch-hero-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.checklist-batch-hero-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 92px;
+  background:
+    radial-gradient(circle at top left, rgba(73, 98, 124, 0.14), transparent 58%),
+    linear-gradient(180deg, rgba(244, 240, 233, 0.92), rgba(244, 240, 233, 0));
+  pointer-events: none;
+}
+
+.checklist-batch-hero-card__body {
+  position: relative;
+  display: grid;
+  gap: 16px;
+}
+
+.checklist-batch-hero-card__header,
+.checklist-batch-hero-card__copy,
+.checklist-batch-hero-card__chips,
+.checklist-batch-hero-card__progress,
+.checklist-batch-hero-card__lead-row,
+.checklist-batch-hero-card__lead-copy,
+.checklist-batch-hero-card__footer,
+.checklist-batch-hero-card__footer-item {
+  display: grid;
+}
+
+.checklist-batch-hero-card__copy {
+  gap: 6px;
+}
+
+.checklist-batch-hero-card__copy h2 {
+  margin: 0;
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.checklist-batch-hero-card__meta-line {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.checklist-batch-hero-card__chips {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.checklist-batch-hero-card__pill {
+  justify-content: flex-start;
+}
+
+.checklist-batch-hero-card__pill svg,
+.checklist-batch-hero-card__footer-item span svg {
+  width: 16px;
+  height: 16px;
+}
+
+.checklist-batch-hero-card__progress {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.checklist-batch-hero-card__mini-stat {
+  min-height: 86px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 20px;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.checklist-batch-hero-card__mini-stat span {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.checklist-batch-hero-card__mini-stat strong {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.checklist-batch-hero-card__lead-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.checklist-batch-hero-card__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(73, 98, 124, 0.14);
+  color: var(--accent-steel);
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.checklist-batch-hero-card__avatar.is-empty {
+  border: 1px dashed rgba(73, 98, 124, 0.24);
+  background: rgba(244, 240, 233, 0.72);
+  color: var(--text-muted);
+}
+
+.checklist-batch-hero-card__lead-copy {
+  gap: 2px;
+}
+
+.checklist-batch-hero-card__lead-copy span,
+.checklist-batch-hero-card__lead-copy small {
+  color: var(--text-muted);
+}
+
+.checklist-batch-hero-card__lead-copy span {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.checklist-batch-hero-card__lead-copy strong {
+  font-size: 1.08rem;
+  line-height: 1.1;
+}
+
+.checklist-batch-hero-card__footer {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.checklist-batch-hero-card__footer-item {
+  gap: 6px;
+  padding: 14px;
+  border-radius: 18px;
+  background: var(--surface-card-muted);
+  border: 1px solid var(--border-soft);
+}
+
+.checklist-batch-hero-card__footer-item span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.checklist-batch-hero-card__footer-item strong,
+.checklist-batch-hero-card__footer-item a {
+  line-height: 1.2;
+}
+
+.checklist-assignee-trigger {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(73, 98, 124, 0.18);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(244, 240, 233, 0.92);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.checklist-assignee-trigger:not(:disabled):hover,
+.checklist-assignee-trigger:not(:disabled):focus-visible,
+.checklist-assignee-trigger.is-open {
+  transform: translateY(-1px);
+  border-color: rgba(73, 98, 124, 0.32);
+  background: rgba(236, 242, 247, 0.98);
+  box-shadow: 0 12px 24px rgba(17, 22, 29, 0.12);
+}
+
+.checklist-assignee-trigger:disabled {
+  cursor: wait;
+  opacity: 0.8;
+}
+
+.checklist-assignee-trigger__caret {
+  font-size: 0.72rem;
+  transition: transform 160ms ease;
+}
+
+.checklist-assignee-trigger.is-open .checklist-assignee-trigger__caret {
+  transform: rotate(180deg);
+}
+
+.checklist-assignee-trigger--hero {
+  min-height: 38px;
+  background: rgba(255, 255, 255, 0.88);
+  justify-self: end;
+}
+
+.checklist-assignee-menu {
+  position: fixed;
+  z-index: 80;
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid rgba(73, 98, 124, 0.16);
+  border-radius: 22px;
+  background: var(--drawer-menu-bg);
+  box-shadow: 0 24px 44px rgba(17, 22, 29, 0.18);
+  display: grid;
+  gap: 10px;
+}
+
+.checklist-assignee-menu--top {
+  transform-origin: bottom right;
+  animation: checklistAssignMenuUp 160ms ease;
+}
+
+.checklist-assignee-menu--bottom {
+  transform-origin: top right;
+  animation: checklistAssignMenuDown 160ms ease;
+}
+
+.checklist-assignee-menu__header {
+  display: grid;
+  gap: 4px;
+}
+
+.checklist-assignee-menu__header span,
+.checklist-assignee-menu__option small,
+.checklist-assignee-menu__empty {
+  color: var(--drawer-menu-muted);
+}
+
+.checklist-assignee-menu__list {
+  display: grid;
+  gap: 8px;
+}
+
+.checklist-assignee-menu__option {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  display: grid;
+  gap: 4px;
+  background: var(--drawer-menu-item-bg);
+  color: var(--drawer-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.checklist-assignee-menu__option:not(:disabled):hover,
+.checklist-assignee-menu__option:not(:disabled):focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--drawer-menu-border);
+  background: var(--drawer-menu-item-hover-bg);
+}
+
+.checklist-assignee-menu__option.is-active {
+  border-color: rgba(57, 179, 107, 0.3);
+  background: var(--drawer-menu-item-active-bg);
+  box-shadow: 0 12px 22px rgba(17, 22, 29, 0.08);
+}
+
+.checklist-assignee-menu__option:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.checklist-assignee-menu__empty {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px dashed rgba(73, 98, 124, 0.16);
+  background: rgba(243, 247, 251, 0.72);
+}
+
+@keyframes checklistAssignMenuDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes checklistAssignMenuUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @media (max-width: 480px) {
   .list-row {
     display: grid;
@@ -3912,8 +4246,29 @@
     padding-left: 52px;
   }
 
+  .list-row__meta {
+    justify-content: flex-start;
+  }
+
   .list-row__actions {
     justify-content: flex-start;
+  }
+
+  .checklist-batch-hero-card__progress {
+    grid-template-columns: 1fr;
+  }
+
+  .checklist-batch-hero-card__lead-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .checklist-assignee-trigger--hero {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .checklist-assignee-menu {
+    width: min(280px, calc(100vw - 16px)) !important;
   }
 }
 
