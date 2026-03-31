@@ -158,6 +158,54 @@ export interface AIChatPageLinkPreview {
   credentials_saved: boolean
 }
 
+export type AIChatDraftStreamStage =
+  | 'preparing'
+  | 'analyzing_link'
+  | 'reading_page'
+  | 'reading_screenshots'
+  | 'reasoning'
+  | 'drafting'
+  | 'reviewing'
+  | 'finalizing'
+
+export type AIChatDraftStreamEvent =
+  | {
+      event: 'start'
+      thread_id: number
+      user_message_id: number
+      assistant_message_id: number
+      assistant_name: string
+      source_mode?: AIChatSourceMode
+      reused?: boolean
+    }
+  | {
+      event: 'stage'
+      stage: AIChatDraftStreamStage
+      source_mode?: AIChatSourceMode
+    }
+  | {
+      event: 'reasoning_delta'
+      delta: string
+      source_mode?: AIChatSourceMode
+    }
+  | {
+      event: 'done'
+      thread_id: number
+      user_message_id: number
+      assistant_message_id: number
+      thread: AIChatThread | null
+      reused?: boolean
+    }
+  | {
+      event: 'error'
+      thread_id?: number
+      user_message_id?: number
+      assistant_message_id?: number
+      message: string
+      code?: string
+      thread?: AIChatThread | null
+    }
+
 interface JsonEnvelope<T> {
   data?: T
   error?: {
@@ -196,6 +244,36 @@ async function requestMultipartJson<T>(accessToken: string, path: string, formDa
 
   const envelope = JSON.parse(rawText) as JsonEnvelope<T>
   return (envelope.data ?? envelope) as T
+}
+
+function parseSseEvent(rawEvent: string): AIChatDraftStreamEvent | null {
+  const lines = rawEvent.split('\n')
+  let eventName = 'message'
+  const dataLines: string[] = []
+
+  for (const line of lines) {
+    if (!line.trim()) {
+      continue
+    }
+    if (line.startsWith('event:')) {
+      eventName = line.slice(6).trim()
+      continue
+    }
+    if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trim())
+    }
+  }
+
+  if (!dataLines.length) {
+    return null
+  }
+
+  const rawData = dataLines.join('\n')
+  const parsed = JSON.parse(rawData) as Record<string, unknown>
+  return {
+    event: eventName,
+    ...parsed,
+  } as AIChatDraftStreamEvent
 }
 
 export function fetchAIChatBootstrap(accessToken: string, orgId: number) {
@@ -262,10 +340,20 @@ export function previewAIChatPageLink(
   )
 }
 
-export function createChecklistDraft(accessToken: string, orgId: number, threadId: number, message: string, attachments: File[]) {
+export function createChecklistDraft(
+  accessToken: string,
+  orgId: number,
+  threadId: number,
+  message: string,
+  attachments: File[],
+  clientRequestId?: string,
+) {
   const formData = new FormData()
   formData.set('org_id', `${orgId}`)
   formData.set('message', message)
+  if (clientRequestId) {
+    formData.set('client_request_id', clientRequestId)
+  }
   attachments.forEach((file) => {
     formData.append('attachments[]', file)
   })
@@ -275,6 +363,78 @@ export function createChecklistDraft(accessToken: string, orgId: number, threadI
     `/ai-chat/threads/${threadId}/checklist-drafts`,
     formData,
   )
+}
+
+export async function streamChecklistDraft(
+  accessToken: string,
+  orgId: number,
+  threadId: number,
+  payload: {
+    message: string
+    attachments: File[]
+    client_request_id: string
+  },
+  handlers: {
+    onEvent: (event: AIChatDraftStreamEvent) => void
+    signal?: AbortSignal
+  },
+) {
+  const formData = new FormData()
+  formData.set('org_id', `${orgId}`)
+  formData.set('message', payload.message)
+  formData.set('client_request_id', payload.client_request_id)
+  payload.attachments.forEach((file) => {
+    formData.append('attachments[]', file)
+  })
+
+  const response = await fetch(`${API_BASE_PATH}/ai-chat/threads/${threadId}/messages/stream`, {
+    method: 'POST',
+    headers: {
+      Accept: 'text/event-stream',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: formData,
+    signal: handlers.signal,
+  })
+
+  if (!response.ok) {
+    const rawText = await response.text()
+    decodeJsonError(response.status, rawText)
+  }
+
+  if (!response.body) {
+    throw new ApiError(500, 'AI chat streaming is unavailable right now.')
+  }
+
+  const decoder = new TextDecoder()
+  const reader = response.body.getReader()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) {
+      break
+    }
+
+    buffer += decoder.decode(value, { stream: true })
+    const events = buffer.split('\n\n')
+    buffer = events.pop() ?? ''
+
+    for (const eventChunk of events) {
+      const parsed = parseSseEvent(eventChunk)
+      if (parsed) {
+        handlers.onEvent(parsed)
+      }
+    }
+  }
+
+  buffer += decoder.decode()
+  if (buffer.trim()) {
+    const parsed = parseSseEvent(buffer)
+    if (parsed) {
+      handlers.onEvent(parsed)
+    }
+  }
 }
 
 export function approveGeneratedChecklistItem(accessToken: string, orgId: number, generatedItemId: number) {

@@ -1,19 +1,21 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { Link, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth-context'
 import { AppTopBar, type AppShellOutletContext } from '../../components/layout'
 import { BrandMark, Icon, ThemeToggle } from '../../components/ui'
 import {
   approveGeneratedChecklistItem,
   createAIChatThread,
-  createChecklistDraft,
   deleteAIChatThread,
   fetchAIChatBootstrap,
   fetchAIChatThread,
   fetchAIChatThreads,
   previewAIChatPageLink,
   rejectGeneratedChecklistItem,
+  streamChecklistDraft,
   updateAIChatDraftContext,
+  type AIChatDraftStreamEvent,
+  type AIChatDraftStreamStage,
   type AIChatBootstrap,
   type AIChatDraftContext,
   type AIChatPageLinkPreview,
@@ -58,6 +60,30 @@ type ThreadStatus = {
 }
 
 type ThreadViewTab = 'chat' | 'summary'
+type DraftSessionPhase = 'idle' | 'preparing' | 'streaming' | 'reviewing' | 'reconciling' | 'done' | 'error'
+
+type AIChatTransientDraft = {
+  requestId: string
+  threadId: number
+  sourceMode: AIChatSourceMode
+  userMessagePreview: string
+  attachments: File[]
+  reasoningText: string
+  phase: DraftSessionPhase
+  stage: AIChatDraftStreamStage | 'preparing'
+  assistantMessageId?: number
+  userMessageId?: number
+  assistantName?: string
+  errorMessage?: string
+}
+
+type ThreadRouteDraftStart = {
+  threadId: number
+  clientRequestId: string
+  message: string
+  attachments: File[]
+  sourceMode: AIChatSourceMode
+}
 
 type SourceChooserOption = {
   mode: AIChatSourceMode
@@ -107,6 +133,18 @@ const flowSteps: Array<{ step: FlowStep; label: string; icon: 'projects' | 'chec
   { step: 4, label: 'Module', icon: 'activity' },
   { step: 5, label: 'Chat', icon: 'chat' },
 ]
+
+const qaSectionHeadingMap = new Map<string, string>([
+  ['steps to replicate', 'Steps to replicate'],
+  ['steps to reproduce', 'Steps to replicate'],
+  ['actual result', 'Actual result'],
+  ['actual results', 'Actual result'],
+  ['expected result', 'Expected result'],
+  ['expected results', 'Expected result'],
+  ['preconditions', 'Preconditions'],
+  ['test data', 'Test data'],
+  ['notes', 'Notes'],
+])
 
 function normalizeSourceMode(value: string | null | undefined, fallback: AIChatSourceMode = 'screenshot'): AIChatSourceMode {
   return value === 'link' ? 'link' : fallback
@@ -171,6 +209,112 @@ function formatFileSize(size: number) {
     return `${Math.round(size / 1024)} KB`
   }
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function createClientRequestId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `draft-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function normalizeSectionHeading(value: string) {
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, ' ')
+  return qaSectionHeadingMap.get(normalized) ?? value.trim()
+}
+
+function splitFormattedText(value: string) {
+  const normalized = value.replace(/\r\n?/g, '\n').trim()
+  if (!normalized) {
+    return { sections: [] as Array<{ heading?: string; body: string }>, hasSections: false }
+  }
+
+  const lines = normalized.split('\n')
+  const sections: Array<{ heading?: string; body: string }> = []
+  let currentHeading = ''
+  let currentBody: string[] = []
+  let hasSections = false
+
+  const flush = () => {
+    if (!currentHeading && !currentBody.length) {
+      return
+    }
+    sections.push({
+      heading: currentHeading || undefined,
+      body: currentBody.join('\n').trim(),
+    })
+    currentHeading = ''
+    currentBody = []
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      if (currentBody.length && currentBody[currentBody.length - 1] !== '') {
+        currentBody.push('')
+      }
+      continue
+    }
+
+    const match = trimmed.match(/^(steps?\s+to\s+(?:reproduce|replicate)|actual\s+results?|expected\s+results?|preconditions|test\s+data|notes)\s*:\s*(.*)$/i)
+    if (match) {
+      flush()
+      currentHeading = normalizeSectionHeading(match[1] ?? '')
+      hasSections = true
+      const remainder = (match[2] ?? '').trim()
+      if (remainder) {
+        currentBody.push(remainder)
+      }
+      continue
+    }
+
+    currentBody.push(trimmed)
+  }
+
+  flush()
+
+  if (!sections.length) {
+    return { sections: [{ body: normalized }], hasSections: false }
+  }
+
+  return { sections, hasSections }
+}
+
+function renderFormattedText(value: string, className: string, blockClassName: string) {
+  const parsed = splitFormattedText(value)
+  if (!parsed.sections.length) {
+    return null
+  }
+
+  if (!parsed.hasSections) {
+    return <p className={className}>{value}</p>
+  }
+
+  return (
+    <div className={`${className} ${className}--sectioned`}>
+      {parsed.sections.map((section, index) => (
+        <div key={`${section.heading ?? 'body'}-${index}`} className={blockClassName}>
+          {section.heading ? <strong>{section.heading}</strong> : null}
+          {section.body ? <p>{section.body}</p> : null}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function mapDraftStageLabel(sourceMode: AIChatSourceMode, stage: AIChatDraftStreamStage | 'preparing') {
+  const labels: Record<AIChatDraftStreamStage | 'preparing', string> = {
+    preparing: 'Preparing draft',
+    analyzing_link: 'Analyzing link',
+    reading_page: 'Reading page',
+    reading_screenshots: sourceMode === 'link' ? 'Reading evidence' : 'Reading screenshots',
+    reasoning: 'Thinking through coverage',
+    drafting: 'Drafting checklist items',
+    reviewing: 'Reviewing the draft',
+    finalizing: 'Finalizing reply',
+  }
+
+  return labels[stage]
 }
 
 function draftContextToForm(context?: AIChatDraftContext | null): DraftFormState {
@@ -658,6 +802,7 @@ function AIChatConversation({
   assistantName,
   emptyTitle,
   emptyMessage,
+  transientDraft,
   pendingItemId,
   onReviewAction,
 }: {
@@ -665,10 +810,22 @@ function AIChatConversation({
   assistantName: string
   emptyTitle: string
   emptyMessage: string
+  transientDraft?: AIChatTransientDraft | null
   pendingItemId?: number | null
   onReviewAction?: (item: AIGeneratedChecklistItem, action: 'approve' | 'reject') => void
 }) {
-  if (!thread?.messages.length) {
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const messageCount = thread?.messages.length ?? 0
+
+  useEffect(() => {
+    const list = listRef.current
+    if (!list) {
+      return
+    }
+    list.scrollTop = list.scrollHeight
+  }, [messageCount, transientDraft?.reasoningText, transientDraft?.phase, transientDraft?.stage])
+
+  if (!thread?.messages.length && !transientDraft) {
     return (
       <div className="ai-chat-conversation__empty">
         <strong>{emptyTitle}</strong>
@@ -678,8 +835,8 @@ function AIChatConversation({
   }
 
   return (
-    <div className="ai-chat-conversation__list">
-      {thread.messages.map((messageItem) => (
+    <div ref={listRef} className="ai-chat-conversation__list">
+      {(thread?.messages ?? []).map((messageItem) => (
         <article key={`${messageItem.role}-${messageItem.id}`} className={`ai-chat-bubble-row ai-chat-bubble-row--${messageItem.role}`}>
           <div className={`ai-chat-bubble ai-chat-bubble--${messageItem.role}`}>
             <span className="ai-chat-bubble__author">
@@ -701,7 +858,7 @@ function AIChatConversation({
                 ))}
               </div>
             ) : null}
-            <p>{messageItem.content || (messageItem.status === 'streaming' ? 'Drafting checklist items...' : ' ')}</p>
+            {renderFormattedText(messageItem.content || (messageItem.status === 'streaming' ? 'Drafting checklist items...' : ' '), 'ai-chat-bubble__content', 'ai-chat-bubble__content-block')}
             {messageItem.error_message ? <small className="ai-chat-bubble__error">{messageItem.error_message}</small> : null}
             {messageItem.generated_checklist_items.length ? (
               <div className="ai-chat-generated-list">
@@ -723,7 +880,7 @@ function AIChatConversation({
                         </span>
                       </div>
                     </div>
-                    {item.description ? <p className="ai-chat-generated-card__description">{item.description}</p> : null}
+                    {item.description ? renderFormattedText(item.description, 'ai-chat-generated-card__description', 'ai-chat-generated-card__description-block') : null}
                     {item.duplicate_summary ? <small className="ai-chat-generated-card__summary">{item.duplicate_summary}</small> : null}
                     {item.duplicate_matches.length ? (
                       <div className="ai-chat-generated-card__matches">
@@ -770,6 +927,46 @@ function AIChatConversation({
           </div>
         </article>
       ))}
+      {transientDraft ? (
+        <>
+          <article className="ai-chat-bubble-row ai-chat-bubble-row--user">
+            <div className="ai-chat-bubble ai-chat-bubble--user">
+              <span className="ai-chat-bubble__author">You | just now</span>
+              {transientDraft.attachments.length ? (
+                <div className="ai-chat-attachment-list">
+                  {transientDraft.attachments.map((attachment) => (
+                    <span key={`${attachment.name}-${attachment.size}`} className="ai-chat-attachment">
+                      <strong>{attachment.name}</strong>
+                      <span>{formatFileSize(attachment.size)}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              <p>{transientDraft.userMessagePreview || (transientDraft.sourceMode === 'link' ? 'Draft a checklist from this page link.' : 'Draft a checklist from the uploaded screenshots and page link.')}</p>
+            </div>
+          </article>
+          <article className="ai-chat-bubble-row ai-chat-bubble-row--assistant">
+            <div className="ai-chat-bubble ai-chat-bubble--assistant ai-chat-bubble--live">
+              <span className="ai-chat-bubble__author">{transientDraft.assistantName || assistantName} | live</span>
+              <div className="ai-chat-live-status">
+                <span className={`pill ai-chat-live-status__pill ai-chat-live-status__pill--${transientDraft.phase}`}>
+                  {mapDraftStageLabel(transientDraft.sourceMode, transientDraft.stage)}
+                </span>
+                <span className="ai-chat-live-status__dot" aria-hidden="true" />
+              </div>
+              {transientDraft.reasoningText ? (
+                renderFormattedText(transientDraft.reasoningText, 'ai-chat-live-reasoning', 'ai-chat-live-reasoning__block')
+              ) : (
+                <div className="ai-chat-live-reasoning ai-chat-live-reasoning--placeholder">
+                  <span className="ai-chat-live-reasoning__shimmer" aria-hidden="true" />
+                  <p>BugCatcher is working on your checklist draft...</p>
+                </div>
+              )}
+              {transientDraft.errorMessage ? <small className="ai-chat-bubble__error">{transientDraft.errorMessage}</small> : null}
+            </div>
+          </article>
+        </>
+      ) : null}
     </div>
   )
 }
@@ -1122,6 +1319,7 @@ function AIChatCreateView({
   const [loadingThread, setLoadingThread] = useState(Boolean(editThreadId))
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
+  const draftInFlightRef = useRef(false)
 
   const selectedProject = useMemo(() => projects.find((project) => project.id === draftForm.projectId) ?? null, [draftForm.projectId, projects])
   const selectedExistingBatch = useMemo(
@@ -1460,6 +1658,10 @@ function AIChatCreateView({
   }
 
   const handleSend = async () => {
+    if (draftInFlightRef.current) {
+      return
+    }
+
     const validationError = validateStep(1) || validateStep(2) || validateStep(3) || validateStep(4)
     if (validationError) {
       setError(validationError)
@@ -1479,13 +1681,21 @@ function AIChatCreateView({
       return
     }
 
+    draftInFlightRef.current = true
     setPending(true)
     setError('')
 
     try {
+      const clientRequestId = createClientRequestId()
       const { threadId } = await syncThreadContext()
-      const result = await createChecklistDraft(accessToken, activeOrgId, threadId, composer.trim(), attachments)
-      navigate(`/app/ai-chat/threads/${result.thread.id}`, { replace: true })
+      const startDraft: ThreadRouteDraftStart = {
+        threadId,
+        clientRequestId,
+        message: composer.trim(),
+        attachments: [...attachments],
+        sourceMode: draftForm.sourceMode,
+      }
+      navigate(`/app/ai-chat/threads/${threadId}`, { replace: true, state: { startDraft } })
     } catch (sendError) {
       setError(
         getErrorMessage(
@@ -1496,6 +1706,7 @@ function AIChatCreateView({
         ),
       )
     } finally {
+      draftInFlightRef.current = false
       setPending(false)
     }
   }
@@ -1792,6 +2003,7 @@ function AIChatThreadView({
   activeOrgId: number
 }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const { threadId } = useParams()
   const activeThreadId = normalizePositiveInt(threadId ?? null)
   const [threads, setThreads] = useState<AIChatThreadSummary[]>([])
@@ -1807,6 +2019,10 @@ function AIChatThreadView({
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
   const [pendingItemId, setPendingItemId] = useState<number | null>(null)
+  const [transientDraft, setTransientDraft] = useState<AIChatTransientDraft | null>(null)
+  const draftInFlightRef = useRef(false)
+  const streamAbortRef = useRef<AbortController | null>(null)
+  const consumedRouteDraftRef = useRef('')
 
   useEffect(() => {
     let ignore = false
@@ -1877,6 +2093,12 @@ function AIChatThreadView({
     setActiveThreadTab('chat')
   }, [activeThreadId])
 
+  useEffect(() => {
+    return () => {
+      streamAbortRef.current?.abort()
+    }
+  }, [])
+
   const activeSourceMode = normalizeSourceMode(activeThread?.draft_context.source_mode, 'screenshot')
   const requiresAttachments = sourceModeRequiresAttachments(activeSourceMode)
   const summary = useMemo(() => buildSummaryRows(draftContextToForm(activeThread?.draft_context), [], null, activeThread?.draft_context), [activeThread?.draft_context])
@@ -1897,6 +2119,160 @@ function AIChatThreadView({
   const refreshThreads = async () => {
     const result = await fetchAIChatThreads(accessToken, activeOrgId)
     setThreads(sortThreads(result.threads))
+  }
+
+  const startDraftRun = async (draftRequest: {
+    message: string
+    attachments: File[]
+    sourceMode: AIChatSourceMode
+    clientRequestId?: string
+  }) => {
+    if (!activeThreadId || !activeThread?.draft_context.is_ready) {
+      setError('Edit the checklist target before drafting more items.')
+      return
+    }
+    if (draftInFlightRef.current) {
+      return
+    }
+    if (sourceModeRequiresAttachments(draftRequest.sourceMode) && !draftRequest.attachments.length) {
+      setError('Upload at least one image before generating checklist draft items.')
+      return
+    }
+
+    const clientRequestId = draftRequest.clientRequestId || createClientRequestId()
+    const assistantName = bootstrap.assistant_name || 'BugCatcher AI'
+    draftInFlightRef.current = true
+    setPending(true)
+    setError('')
+    setMessage('')
+    setActiveThreadTab('chat')
+    setTransientDraft({
+      requestId: clientRequestId,
+      threadId: activeThreadId,
+      sourceMode: draftRequest.sourceMode,
+      userMessagePreview: draftRequest.message.trim(),
+      attachments: [...draftRequest.attachments],
+      reasoningText: '',
+      phase: 'preparing',
+      stage: 'preparing',
+      assistantName,
+    })
+
+    const controller = new AbortController()
+    streamAbortRef.current = controller
+    let completedThread: AIChatThread | null = null
+    let streamErrorMessage = ''
+
+    try {
+      await streamChecklistDraft(
+        accessToken,
+        activeOrgId,
+        activeThreadId,
+        {
+          message: draftRequest.message.trim(),
+          attachments: draftRequest.attachments,
+          client_request_id: clientRequestId,
+        },
+        {
+          signal: controller.signal,
+          onEvent: (event: AIChatDraftStreamEvent) => {
+            switch (event.event) {
+              case 'start':
+                setTransientDraft((current) => (current && current.requestId === clientRequestId
+                  ? {
+                      ...current,
+                      phase: 'streaming',
+                      stage: 'preparing',
+                      assistantMessageId: event.assistant_message_id,
+                      userMessageId: event.user_message_id,
+                      assistantName: event.assistant_name || assistantName,
+                    }
+                  : current))
+                break
+              case 'stage':
+                setTransientDraft((current) => (current && current.requestId === clientRequestId
+                  ? {
+                      ...current,
+                      phase: event.stage === 'reviewing' ? 'reviewing' : event.stage === 'finalizing' ? 'reconciling' : 'streaming',
+                      stage: event.stage,
+                    }
+                  : current))
+                break
+              case 'reasoning_delta':
+                setTransientDraft((current) => (current && current.requestId === clientRequestId
+                  ? {
+                      ...current,
+                      phase: 'streaming',
+                      reasoningText: `${current.reasoningText}${event.delta}`,
+                    }
+                  : current))
+                break
+              case 'done':
+                completedThread = event.thread ?? null
+                setTransientDraft((current) => (current && current.requestId === clientRequestId
+                  ? {
+                      ...current,
+                      phase: 'reconciling',
+                    }
+                  : current))
+                break
+              case 'error':
+                streamErrorMessage = event.message || 'AI chat could not complete the reply. Please try again.'
+                if (event.thread) {
+                  completedThread = event.thread
+                }
+                setTransientDraft((current) => (current && current.requestId === clientRequestId
+                  ? {
+                      ...current,
+                      phase: 'error',
+                      errorMessage: event.message || 'AI chat could not complete the reply. Please try again.',
+                    }
+                  : current))
+                break
+            }
+          },
+        },
+      )
+
+      if (streamErrorMessage) {
+        if (completedThread) {
+          setActiveThread(completedThread)
+          await refreshThreads()
+        }
+        setError(streamErrorMessage)
+        return
+      }
+
+      const finalThread = completedThread ?? (await fetchAIChatThread(accessToken, activeOrgId, activeThreadId)).thread
+      setActiveThread(finalThread)
+      setComposer('')
+      setAttachments([])
+      await refreshThreads()
+      setTransientDraft(null)
+    } catch (sendError) {
+      if ((sendError as Error).name === 'AbortError') {
+        return
+      }
+      setTransientDraft((current) => current
+        ? {
+            ...current,
+            phase: 'error',
+            errorMessage: getErrorMessage(sendError, 'AI chat could not complete the reply. Please try again.'),
+          }
+        : current)
+      setError(
+        getErrorMessage(
+          sendError,
+          draftRequest.sourceMode === 'link'
+            ? 'Unable to draft checklist items from the saved page link.'
+            : 'Unable to draft checklist items from the uploaded screenshots and page link.',
+        ),
+      )
+    } finally {
+      draftInFlightRef.current = false
+      streamAbortRef.current = null
+      setPending(false)
+    }
   }
 
   const handleDeleteThread = async (threadIdToDelete: number) => {
@@ -1924,38 +2300,32 @@ function AIChatThreadView({
   }
 
   const handleSend = async () => {
-    if (!activeThreadId || !activeThread?.draft_context.is_ready) {
-      setError('Edit the checklist target before drafting more items.')
-      return
-    }
-    if (requiresAttachments && !attachments.length) {
-      setError('Upload at least one image before generating checklist draft items.')
-      return
-    }
-
-    setPending(true)
-    setError('')
-    setMessage('')
-
-    try {
-      const result = await createChecklistDraft(accessToken, activeOrgId, activeThreadId, composer.trim(), attachments)
-      setActiveThread(result.thread)
-      setComposer('')
-      setAttachments([])
-      await refreshThreads()
-    } catch (sendError) {
-      setError(
-        getErrorMessage(
-          sendError,
-          activeSourceMode === 'link'
-            ? 'Unable to draft checklist items from the saved page link.'
-            : 'Unable to draft checklist items from the uploaded screenshots and page link.',
-        ),
-      )
-    } finally {
-      setPending(false)
-    }
+    await startDraftRun({
+      message: composer,
+      attachments,
+      sourceMode: activeSourceMode,
+    })
   }
+
+  useEffect(() => {
+    const routeState = (location.state as { startDraft?: ThreadRouteDraftStart } | null) ?? null
+    const routeDraft = routeState?.startDraft
+    if (!routeDraft || !activeThreadId || routeDraft.threadId !== activeThreadId || !activeThread) {
+      return
+    }
+    if (consumedRouteDraftRef.current === routeDraft.clientRequestId) {
+      return
+    }
+
+    consumedRouteDraftRef.current = routeDraft.clientRequestId
+    navigate(location.pathname, { replace: true, state: null })
+    void startDraftRun({
+      message: routeDraft.message,
+      attachments: routeDraft.attachments,
+      sourceMode: routeDraft.sourceMode,
+      clientRequestId: routeDraft.clientRequestId,
+    })
+  }, [activeThread, activeThreadId, location.pathname, location.state, navigate])
 
   const handleReviewAction = async (item: AIGeneratedChecklistItem, action: 'approve' | 'reject') => {
     if (!activeThreadId) {
@@ -2089,6 +2459,7 @@ function AIChatThreadView({
                         ? 'This chat is ready for a link-based checklist draft.'
                         : 'This chat is ready for your first screenshot-based checklist draft.'
                     }
+                    transientDraft={transientDraft}
                     pendingItemId={pendingItemId}
                     onReviewAction={(item, action) => void handleReviewAction(item, action)}
                   />
