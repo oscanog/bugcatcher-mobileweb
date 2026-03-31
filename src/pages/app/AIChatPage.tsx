@@ -958,8 +958,9 @@ function AIChatCreateView({
   }, [accessToken, activeOrgId, editThreadId, navigate, queryStep])
 
   useEffect(() => {
-    if (draftForm.projectId <= 0 || draftForm.targetMode !== 'existing') {
+    if (draftForm.projectId <= 0) {
       setAvailableBatches([])
+      setLoadingBatches(false)
       return
     }
 
@@ -971,6 +972,7 @@ function AIChatCreateView({
         const result = await fetchChecklistBatches(accessToken, activeOrgId, { projectId: draftForm.projectId })
         if (!ignore) {
           setAvailableBatches(result.batches)
+          setError('')
         }
       } catch (loadError) {
         if (!ignore) {
@@ -988,7 +990,7 @@ function AIChatCreateView({
     return () => {
       ignore = true
     }
-  }, [accessToken, activeOrgId, draftForm.projectId, draftForm.targetMode])
+  }, [accessToken, activeOrgId, draftForm.projectId])
 
   const selectedProject = useMemo(() => projects.find((project) => project.id === draftForm.projectId) ?? null, [draftForm.projectId, projects])
   const selectedExistingBatch = useMemo(
@@ -1159,7 +1161,7 @@ function AIChatCreateView({
                   <small>Create a brand new checklist batch for this target.</small>
                 </span>
               </button>
-              {loadingBatches && draftForm.targetMode === 'existing' ? <div className="ai-chat-inline-note">Loading checklist batches for this project...</div> : null}
+              {loadingBatches ? <div className="ai-chat-inline-note">Loading checklist batches for this project...</div> : null}
               {availableBatches.map((batch) => (
                 <button
                   key={batch.id}
@@ -1182,6 +1184,9 @@ function AIChatCreateView({
                   </span>
                 </button>
               ))}
+              {!loadingBatches && draftForm.projectId > 0 && availableBatches.length === 0 ? (
+                <div className="ai-chat-inline-note">No existing checklist batches were found for this project yet.</div>
+              ) : null}
             </div>
             {draftForm.targetMode === 'new' ? (
               <div className="inline-form">

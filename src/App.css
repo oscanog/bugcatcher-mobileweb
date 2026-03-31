@@ -4404,7 +4404,12 @@
 
 .ai-chat-page__body--thread {
   position: relative;
-  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
 }
 
 .ai-chat-state-card,
@@ -4762,12 +4767,26 @@
   flex-direction: column;
 }
 
+.ai-chat-page--thread .ai-chat-thread-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: stretch;
+}
+
+.ai-chat-page--thread .ai-chat-thread-stage__conversation {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .ai-chat-page--thread .ai-chat-compose {
-  position: sticky;
-  bottom: 84px;
-  z-index: 9;
-  background: color-mix(in srgb, var(--mobile-frame-bg) 92%, transparent);
-  backdrop-filter: blur(16px);
+  position: static;
+  z-index: auto;
+  margin-top: 0;
+  background: var(--surface-card);
+  backdrop-filter: none;
 }
 
 .ai-chat-compose__toolbar span {
