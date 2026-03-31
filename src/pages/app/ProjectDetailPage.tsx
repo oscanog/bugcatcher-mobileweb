@@ -1,11 +1,135 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth-context'
-import { DetailPair, ListRow, SectionCard } from '../../components/ui'
+import { Icon, SectionCard } from '../../components/ui'
 import { canManageProjects } from '../../lib/access'
 import { getErrorMessage } from '../../lib/api'
-import { fetchProject, setProjectStatus, updateProject, type ProjectDetailResponse } from '../../features/projects/api'
+import { fetchProject, setProjectStatus, updateProject, type ChecklistBatchSummary, type ProjectDetailResponse, type ProjectSummary } from '../../features/projects/api'
 import { FormMessage, LoadingSection, formatDateTime } from '../shared'
+
+function formatProjectStatusLabel(status: ProjectSummary['status']) {
+  return status === 'archived' ? 'Archived' : 'Active'
+}
+
+function projectStatusPillClass(status: ProjectSummary['status']) {
+  return status === 'active'
+    ? 'pill pill--dark checklist-batch-hero-card__pill'
+    : 'pill pill--danger checklist-batch-hero-card__pill'
+}
+
+function formatBatchStatusLabel(status: string) {
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
+function parseCount(value: string | number | null | undefined) {
+  return Number(value || 0)
+}
+
+function projectMetaLine(project: ProjectSummary) {
+  const parts = [project.code || null, project.description || null].filter(Boolean)
+  return parts.length ? parts.join(' | ') : 'No project code or description yet.'
+}
+
+function summarizeBatchItems(batches: ChecklistBatchSummary[]) {
+  return batches.reduce(
+    (totals, batch) => ({
+      open: totals.open + parseCount(batch.open_items),
+      progress: totals.progress + parseCount(batch.in_progress_items),
+      done: totals.done + parseCount(batch.passed_items) + parseCount(batch.failed_items),
+      blocked: totals.blocked + parseCount(batch.blocked_items),
+    }),
+    { open: 0, progress: 0, done: 0, blocked: 0 },
+  )
+}
+
+function batchSupportLine(batch: ChecklistBatchSummary) {
+  const location = [batch.module_name, batch.submodule_name || null].filter(Boolean).join(' | ')
+  return location || 'No module or submodule'
+}
+
+function batchDoneCount(batch: ChecklistBatchSummary) {
+  return parseCount(batch.passed_items) + parseCount(batch.failed_items)
+}
+
+function ProjectHeroCard({ project, batches }: { project: ProjectSummary; batches: ChecklistBatchSummary[] }) {
+  const totals = useMemo(() => summarizeBatchItems(batches), [batches])
+
+  return (
+    <section className="section-card checklist-batch-hero-card project-detail-hero-card">
+      <div className="section-card__body checklist-batch-hero-card__body">
+        <div className="checklist-batch-hero-card__header">
+          <div className="checklist-batch-hero-card__copy">
+            <p className="eyebrow">{project.org_name}</p>
+            <h2>{project.name}</h2>
+            <p className="checklist-batch-hero-card__meta-line">{projectMetaLine(project)}</p>
+          </div>
+        </div>
+
+        <div className="checklist-batch-hero-card__chips">
+          <span className={projectStatusPillClass(project.status)}>{formatProjectStatusLabel(project.status)}</span>
+          <span className="pill checklist-batch-hero-card__pill">
+            <Icon name="checklist" />
+            {batches.length} batch{batches.length === 1 ? '' : 'es'}
+          </span>
+          <span className="pill checklist-batch-hero-card__pill">
+            <Icon name="clock" />
+            Created {formatDateTime(project.created_at, project.created_at_iso)}
+          </span>
+          <span className="pill checklist-batch-hero-card__pill">
+            <Icon name="activity" />
+            Updated {formatDateTime(project.updated_at || project.created_at, project.updated_at_iso || project.created_at_iso)}
+          </span>
+        </div>
+
+        <div className="checklist-batch-hero-card__progress">
+          <article className="checklist-batch-hero-card__mini-stat">
+            <span>Open</span>
+            <strong>{totals.open}</strong>
+          </article>
+          <article className="checklist-batch-hero-card__mini-stat">
+            <span>Progress</span>
+            <strong>{totals.progress}</strong>
+          </article>
+          <article className="checklist-batch-hero-card__mini-stat">
+            <span>Done</span>
+            <strong>{totals.done}</strong>
+          </article>
+          <article className="checklist-batch-hero-card__mini-stat">
+            <span>Blocked</span>
+            <strong>{totals.blocked}</strong>
+          </article>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function ProjectBatchCard({ batch }: { batch: ChecklistBatchSummary }) {
+  return (
+    <article className="project-batch-card">
+      <div className="project-batch-card__header">
+        <span className="icon-wrap project-batch-card__icon">
+          <Icon name="checklist" />
+        </span>
+        <div className="project-batch-card__copy">
+          <p className="eyebrow">{batch.org_name || 'Checklist batch'}</p>
+          <strong>{batch.title}</strong>
+          <p>{batchSupportLine(batch)}</p>
+        </div>
+        <Link className="project-list-card__open" to={`/app/checklist/batches/${batch.id}`}>
+          Open
+        </Link>
+      </div>
+
+      <div className="project-batch-card__chips">
+        <span className="pill pill--dark">{formatBatchStatusLabel(batch.status)}</span>
+        <span className="pill">{batch.total_items} items</span>
+        <span className="pill">{parseCount(batch.open_items) + parseCount(batch.in_progress_items) + parseCount(batch.blocked_items)} active</span>
+        <span className="pill">{batchDoneCount(batch)} done</span>
+      </div>
+    </article>
+  )
+}
 
 export function ProjectDetailPage() {
   const { projectId } = useParams()
@@ -57,7 +181,7 @@ export function ProjectDetailPage() {
         name: name.trim(),
         code: code.trim(),
         description: description.trim(),
-        status: data?.project.status ?? 'active',
+        status: data.project.status,
       })
       setMessage('Project updated.')
       await load()
@@ -96,61 +220,70 @@ export function ProjectDetailPage() {
 
   return (
     <div className="page-stack">
-      {message ? <FormMessage tone="success">{message}</FormMessage> : null}
-      {error ? <FormMessage tone="error">{error}</FormMessage> : null}
+      {message ? <FormMessage tone="success" onDismiss={() => setMessage('')}>{message}</FormMessage> : null}
+      {error ? <FormMessage tone="error" onDismiss={() => setError('')}>{error}</FormMessage> : null}
 
       {data ? (
         <>
-          <SectionCard title={data.project.name} subtitle={data.project.code || 'No project code'}>
-            <div className="detail-pairs">
-              <DetailPair label="Status" value={data.project.status} />
-              <DetailPair label="Organization" value={data.project.org_name} />
-              <DetailPair label="Created" value={formatDateTime(data.project.created_at, data.project.created_at_iso)} />
-              <DetailPair label="Updated" value={formatDateTime(data.project.updated_at || data.project.created_at, data.project.updated_at_iso || data.project.created_at_iso)} />
-              <DetailPair label="Batches" value={`${data.batches.length}`} />
-            </div>
-          </SectionCard>
+          <ProjectHeroCard project={data.project} batches={data.batches} />
 
           {canEditProject ? (
-            <SectionCard title="Update Project">
-              <form className="auth-stack" onSubmit={handleSave}>
-                <input className="input-inline" value={name} onChange={(event) => setName(event.target.value)} placeholder="Project name" />
-                <input className="input-inline" value={code} onChange={(event) => setCode(event.target.value)} placeholder="Project code" />
-                <textarea className="input-inline textarea-inline" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Project description" />
-                <div className="auth-actions-row">
-                  <button type="submit" className="button button--primary" disabled={pending || !name.trim()}>
-                    {pending ? 'Saving...' : 'Save'}
-                  </button>
-                  <button
-                    type="button"
-                    className="button button--ghost"
-                    disabled={pending}
-                    onClick={() => void handleStatus(data.project.status === 'active' ? 'archived' : 'active')}
-                  >
-                    {data.project.status === 'active' ? 'Archive' : 'Activate'}
-                  </button>
+            <SectionCard title="Project Management" subtitle="Update the project profile and lifecycle">
+              <div className="projects-manage-shell">
+                <div className="projects-manage-shell__copy">
+                  <p className="eyebrow">Project controls</p>
+                  <p className="body-copy">Keep naming, shorthand, and scope clean so checklist batches stay organized for the whole team.</p>
                 </div>
-              </form>
+
+                <form className="projects-form-card" onSubmit={handleSave}>
+                  <label className="projects-form-card__field">
+                    <span>Project name</span>
+                    <input className="input-inline" value={name} onChange={(event) => setName(event.target.value)} placeholder="Landing page redesign" />
+                  </label>
+
+                  <label className="projects-form-card__field">
+                    <span>Project code</span>
+                    <input className="input-inline" value={code} onChange={(event) => setCode(event.target.value)} placeholder="LP-REDESIGN" />
+                  </label>
+
+                  <label className="projects-form-card__field">
+                    <span>Description</span>
+                    <textarea
+                      className="input-inline textarea-inline"
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                      placeholder="Describe the working area, page set, or release scope for this project."
+                    />
+                  </label>
+
+                  <div className="auth-actions-row">
+                    <button type="submit" className="button button--primary" disabled={pending || !name.trim()}>
+                      {pending ? 'Saving...' : 'Save Changes'}
+                    </button>
+                    <button
+                      type="button"
+                      className="button button--ghost"
+                      disabled={pending}
+                      onClick={() => void handleStatus(data.project.status === 'active' ? 'archived' : 'active')}
+                    >
+                      {data.project.status === 'active' ? 'Archive Project' : 'Activate Project'}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </SectionCard>
           ) : null}
 
-          <SectionCard title="Checklist Batches">
-            <div className="list-stack">
-              {data.batches.map((batch) => (
-                <ListRow
-                  key={batch.id}
-                  icon="checklist"
-                  title={batch.title}
-                  detail={`${batch.module_name}${batch.submodule_name ? ` / ${batch.submodule_name}` : ''}`}
-                  meta={`${batch.status} • ${batch.total_items} items`}
-                  action={
-                    <Link className="inline-link" to={`/app/checklist/batches/${batch.id}`}>
-                      Open
-                    </Link>
-                  }
-                />
-              ))}
-            </div>
+          <SectionCard title="Checklist Batches" subtitle={`${data.batches.length} linked batch${data.batches.length === 1 ? '' : 'es'}`}>
+            {data.batches.length ? (
+              <div className="projects-card-grid">
+                {data.batches.map((batch) => (
+                  <ProjectBatchCard key={batch.id} batch={batch} />
+                ))}
+              </div>
+            ) : (
+              <p className="body-copy">No checklist batches have been attached to this project yet.</p>
+            )}
           </SectionCard>
         </>
       ) : null}

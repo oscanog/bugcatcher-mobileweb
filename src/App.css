@@ -257,6 +257,14 @@
   overflow: hidden;
 }
 
+.auth-screen__header .theme-toggle {
+  padding-right: 4px;
+}
+
+.auth-screen__header .theme-toggle__label {
+  display: none;
+}
+
 .auth-screen__copy p:last-child,
 .auth-screen__status p,
 .section-card__header p,
@@ -4084,13 +4092,17 @@ button.checklist-batch-hero-card__lead-compact {
   min-width: 0;
   max-width: 100%;
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
 }
 
 .checklist-batch-hero-card__pill--link svg {
   flex-shrink: 0;
 }
 
-.checklist-batch-hero-card__pill--link {
+.checklist-batch-hero-card__pill-label {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -4497,6 +4509,209 @@ button.checklist-batch-hero-card__lead-compact {
 
   .checklist-assignee-menu {
     width: min(280px, calc(100vw - 16px)) !important;
+  }
+}
+
+.projects-card-grid,
+.project-list-card,
+.project-list-card__header,
+.project-list-card__copy,
+.project-list-card__chips,
+.project-list-card__meta,
+.project-batch-card,
+.project-batch-card__header,
+.project-batch-card__copy,
+.project-batch-card__chips,
+.projects-manage-shell,
+.projects-manage-shell__copy,
+.projects-form-card,
+.projects-form-card__field {
+  display: grid;
+}
+
+.projects-card-grid {
+  gap: 14px;
+}
+
+.project-list-card,
+.project-batch-card {
+  position: relative;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid var(--border-soft);
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent-steel) 16%, transparent), transparent 54%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-card) 96%, transparent), var(--surface-card));
+  overflow: hidden;
+}
+
+.project-list-card__header,
+.project-batch-card__header {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.project-list-card__icon,
+.project-batch-card__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--surface-card-muted) 88%, transparent);
+  border: 1px solid var(--border-soft);
+}
+
+.project-list-card__copy,
+.project-batch-card__copy {
+  min-width: 0;
+  gap: 6px;
+}
+
+.project-list-card__copy strong,
+.project-batch-card__copy strong {
+  font-size: 1.12rem;
+  line-height: 1.08;
+}
+
+.project-list-card__copy p:last-child,
+.project-batch-card__copy p:last-child {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.project-list-card__open {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent-steel) 22%, var(--border-soft));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--surface-card) 90%, transparent);
+  color: var(--text-primary);
+  text-decoration: none;
+  font-weight: 700;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.project-list-card__open:hover,
+.project-list-card__open:focus-visible {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent-steel) 34%, var(--border-soft));
+  background: color-mix(in srgb, var(--drawer-menu-item-bg) 92%, var(--surface-card));
+  box-shadow: 0 12px 24px rgba(17, 22, 29, 0.12);
+}
+
+.project-list-card__chips,
+.project-batch-card__chips {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.project-list-card__chips .pill,
+.project-batch-card__chips .pill {
+  justify-content: flex-start;
+}
+
+.project-list-card__meta {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.projects-manage-shell {
+  gap: 16px;
+}
+
+.projects-manage-shell__copy {
+  gap: 8px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--surface-card-muted) 90%, transparent);
+}
+
+.projects-manage-shell__copy p {
+  margin: 0;
+}
+
+.projects-form-card {
+  gap: 14px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid var(--border-soft);
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent-steel) 10%, transparent), transparent 58%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-card) 96%, transparent), var(--surface-card));
+}
+
+.projects-form-card__field {
+  gap: 8px;
+}
+
+.projects-form-card__field > span {
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.site-shell[data-theme='dark'] .project-list-card,
+.site-shell[data-theme='dark'] .project-batch-card {
+  background:
+    radial-gradient(circle at top left, rgba(73, 98, 124, 0.24), transparent 56%),
+    linear-gradient(180deg, rgba(27, 34, 44, 0.98), rgba(23, 30, 39, 0.98));
+}
+
+.site-shell[data-theme='dark'] .project-list-card__icon,
+.site-shell[data-theme='dark'] .project-batch-card__icon,
+.site-shell[data-theme='dark'] .projects-manage-shell__copy {
+  background: color-mix(in srgb, var(--surface-card-muted) 96%, rgba(7, 12, 18, 0.3));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.site-shell[data-theme='dark'] .projects-form-card {
+  background:
+    radial-gradient(circle at top left, rgba(73, 98, 124, 0.18), transparent 56%),
+    linear-gradient(180deg, rgba(27, 34, 44, 0.98), rgba(23, 30, 39, 0.98));
+}
+
+.site-shell[data-theme='dark'] .project-list-card__open {
+  border-color: rgba(126, 151, 176, 0.2);
+  background: rgba(27, 34, 44, 0.96);
+  color: #eef4fb;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.site-shell[data-theme='dark'] .project-list-card__open:hover,
+.site-shell[data-theme='dark'] .project-list-card__open:focus-visible {
+  border-color: rgba(126, 151, 176, 0.34);
+  background: rgba(34, 44, 57, 0.98);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 12px 24px rgba(2, 6, 12, 0.34);
+}
+
+@media (max-width: 560px) {
+  .project-list-card__header,
+  .project-batch-card__header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .project-list-card__open {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 }
 

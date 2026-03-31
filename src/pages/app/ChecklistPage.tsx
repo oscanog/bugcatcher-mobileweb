@@ -8,9 +8,11 @@ import { getErrorMessage } from '../../lib/api'
 import {
   fetchChecklistBatch,
   fetchChecklistBatches,
+  fetchChecklistItem,
   updateChecklistBatch,
   updateChecklistItem,
   type ChecklistAttachment,
+  type ChecklistAssigneeOption,
   type ChecklistBatch,
   type ChecklistBatchDetailResponse,
   type ChecklistBatchesResponse,
@@ -314,7 +316,7 @@ function BatchSummaryCard({
               title={batch.page_url}
             >
               <Icon name="globe" />
-              {compactPageLinkLabel(batch.page_url)}
+              <span className="checklist-batch-hero-card__pill-label">{compactPageLinkLabel(batch.page_url)}</span>
             </a>
           ) : (
             <span className="pill checklist-batch-hero-card__pill">
@@ -479,6 +481,8 @@ export function ChecklistBatchDetailPage() {
   const [assignMenuAnchor, setAssignMenuAnchor] = useState<HTMLButtonElement | null>(null)
   const [isBatchLeadMenuOpen, setIsBatchLeadMenuOpen] = useState(false)
   const [batchLeadMenuAnchor, setBatchLeadMenuAnchor] = useState<HTMLButtonElement | null>(null)
+  const [fallbackAssignableTesters, setFallbackAssignableTesters] = useState<ChecklistAssigneeOption[]>([])
+  const [isLoadingFallbackAssignableTesters, setIsLoadingFallbackAssignableTesters] = useState(false)
 
   const numericBatchId = Number(batchId)
   const batchMembership = data ? getMembershipForOrg(data.batch.org_id) : null
@@ -486,18 +490,22 @@ export function ChecklistBatchDetailPage() {
   const activeAssignItem = data?.items.find((item) => item.id === openAssignItemId) ?? null
   const assignableTesters = useMemo(() => data?.assignable_testers ?? [], [data?.assignable_testers])
   const assignableQaLeads = useMemo(() => data?.assignable_qa_leads ?? [], [data?.assignable_qa_leads])
+  const resolvedAssignableTesters = useMemo(
+    () => (assignableTesters.length > 0 ? assignableTesters : fallbackAssignableTesters),
+    [assignableTesters, fallbackAssignableTesters],
+  )
   const shouldShowScreenshots = data?.batch.source_mode !== 'link'
 
   const itemAssignOptions = useMemo<SelectionMenuOption[]>(
     () => [
       { value: 0, label: 'Unassigned', description: 'Clear current assignee' },
-      ...assignableTesters.map((member) => ({
+      ...resolvedAssignableTesters.map((member) => ({
         value: member.user_id,
         label: member.username,
         description: member.role,
       })),
     ],
-    [assignableTesters],
+    [resolvedAssignableTesters],
   )
 
   const qaLeadOptions = useMemo<SelectionMenuOption[]>(
@@ -557,6 +565,56 @@ export function ChecklistBatchDetailPage() {
       closeBatchLeadMenu()
     }
   }, [canManageBatch, closeBatchLeadMenu, closeItemAssignMenu])
+
+  useEffect(() => {
+    setFallbackAssignableTesters([])
+    setIsLoadingFallbackAssignableTesters(false)
+  }, [data?.batch.id])
+
+  useEffect(() => {
+    if (!canManageBatch || !activeAssignItem || !data || !session?.accessToken) {
+      setIsLoadingFallbackAssignableTesters(false)
+      return
+    }
+
+    if (assignableTesters.length > 0 || fallbackAssignableTesters.length > 0) {
+      setIsLoadingFallbackAssignableTesters(false)
+      return
+    }
+
+    let cancelled = false
+    setIsLoadingFallbackAssignableTesters(true)
+
+    void fetchChecklistItem(session.accessToken, data.batch.org_id, activeAssignItem.id)
+      .then((result) => {
+        if (cancelled) {
+          return
+        }
+        setFallbackAssignableTesters(result.assignable_testers ?? [])
+      })
+      .catch((loadError) => {
+        if (cancelled) {
+          return
+        }
+        setError((current) => current || getErrorMessage(loadError, 'Unable to load QA Tester members.'))
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingFallbackAssignableTesters(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    activeAssignItem,
+    assignableTesters.length,
+    canManageBatch,
+    data,
+    fallbackAssignableTesters.length,
+    session?.accessToken,
+  ])
 
   const handleQuickAssign = useCallback(async (item: ChecklistItem, assignedToUserId: number) => {
     if (!session?.accessToken || !data) {
@@ -788,8 +846,10 @@ export function ChecklistBatchDetailPage() {
             subtitle={activeAssignItem?.title || data.batch.title}
             options={itemAssignOptions}
             selectedValue={activeAssignItem?.assigned_to_user_id ?? 0}
-            pending={pendingAssignmentItemId !== null}
-            emptyMessage="No QA Tester members are available in this organization."
+            pending={pendingAssignmentItemId !== null || isLoadingFallbackAssignableTesters}
+            emptyMessage={isLoadingFallbackAssignableTesters
+              ? 'Loading QA Tester members...'
+              : 'No QA Tester members are available in this organization.'}
             onClose={closeItemAssignMenu}
             onSelect={(assignedToUserId) => {
               if (activeAssignItem) {
