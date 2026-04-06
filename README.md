@@ -124,7 +124,12 @@ GitHub Actions deploys this app to the GCloud VM on every push to `main`.
 - Checklist item detail supports live attachment uploads through the backend checklist API.
 - AI chat screenshot uploads still go through the backend and do not require frontend Cloudinary secrets.
 
-Live hostnames:
+Canonical live hostnames:
+
+- `https://m.webtest.solutions`
+- `https://mobile.webtest.solutions`
+
+Legacy redirect hostnames:
 
 - `https://m.bugcatcher.online`
 - `https://mobile.bugcatcher.online`
@@ -147,4 +152,4 @@ Workflow:
 2. `npm run build`
 3. Upload release bundle to the VM
 4. Publish `dist/` to `/var/www/bugcatcher-mobileweb`
-5. Install Nginx config, issue/reuse TLS certs, test config, reload Nginx
+5. Install Nginx config, issue/reuse TLS certs for both the legacy and new mobile hosts, test config, reload Nginx

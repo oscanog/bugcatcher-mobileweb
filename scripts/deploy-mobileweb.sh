@@ -12,6 +12,28 @@ NGINX_ENABLED="/etc/nginx/sites-enabled/${APP_NAME}.conf"
 NGINX_SOURCE="${REPO_DIR}/infra/nginx/bugcatcher-mobileweb.conf"
 CERT_NAME="${APP_NAME}"
 CERT_FULLCHAIN="/etc/letsencrypt/live/${CERT_NAME}/fullchain.pem"
+CERT_DOMAINS=(
+  "m.bugcatcher.online"
+  "mobile.bugcatcher.online"
+  "m.webtest.solutions"
+  "mobile.webtest.solutions"
+)
+
+cert_missing_domain() {
+  local cert_output
+
+  if ! cert_output="$(sudo certbot certificates --cert-name "${CERT_NAME}" 2>/dev/null)"; then
+    return 0
+  fi
+
+  for domain in "${CERT_DOMAINS[@]}"; do
+    if [[ "${cert_output}" != *"${domain}"* ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
 
 if [ ! -d "${REPO_DIR}/.git" ]; then
   sudo mkdir -p "$(dirname "${REPO_DIR}")"
@@ -48,7 +70,7 @@ if [ ! -f "${CERT_FULLCHAIN}" ]; then
 server {
     listen 80;
     listen [::]:80;
-    server_name m.bugcatcher.online mobile.bugcatcher.online;
+    server_name m.bugcatcher.online mobile.bugcatcher.online m.webtest.solutions mobile.webtest.solutions;
 
     root /var/www/bugcatcher-mobileweb/dist;
     index index.html;
@@ -73,16 +95,20 @@ EOF
 
   sudo nginx -t
   sudo systemctl reload nginx
+fi
 
+if cert_missing_domain; then
   sudo certbot certonly \
     --webroot \
     -w "${WEB_ROOT}" \
     -d m.bugcatcher.online \
     -d mobile.bugcatcher.online \
+    -d m.webtest.solutions \
+    -d mobile.webtest.solutions \
     --cert-name "${CERT_NAME}" \
     --non-interactive \
     --agree-tos \
-    --keep-until-expiring
+    --expand
 fi
 
 sudo install -m 644 "${NGINX_SOURCE}" "${NGINX_AVAILABLE}"
